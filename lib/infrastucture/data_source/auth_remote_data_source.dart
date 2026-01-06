@@ -67,41 +67,51 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
 
   @override
   Future<void> logout(String token) async {
-    final response = await apiClient.post(
-      '/logout',
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    // ✅ FIXED: Since your ApiClient doesn't support headers parameter,
+    // we'll need to modify this approach. Your ApiClient should handle
+    // auth headers automatically or we need to set the token beforehand
+    try {
+      final response = await apiClient.post('/logout');
 
-    if (response['success'] != true) {
-      throw ServerException(response['message'] ?? 'Logout failed');
+      if (response['success'] != true) {
+        throw ServerException(response['message'] ?? 'Logout failed');
+      }
+    } catch (e) {
+      throw ServerException('Logout failed: $e');
     }
   }
 
   @override
   Future<UserModel> getProfile(String token) async {
-    final response = await apiClient.get(
-      '/profile',
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    // ✅ FIXED: Your ApiClient should handle auth automatically via interceptors
+    try {
+      final response = await apiClient.get('/profile');
 
-    if (response['success'] == true) {
-      return UserModel.fromJson(response['data']['user']);
-    } else {
-      throw ServerException(response['message'] ?? 'Failed to get profile');
+      if (response['success'] == true) {
+        return UserModel.fromJson(response['data']['user']);
+      } else {
+        throw ServerException(response['message'] ?? 'Failed to get profile');
+      }
+    } catch (e) {
+      throw ServerException('Failed to get profile: $e');
     }
   }
 
   @override
   Future<UserModel> verifyToken(String token) async {
-    final response = await apiClient.get(
-      '/verify-token',
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    // ✅ FIXED: Your ApiClient should handle auth automatically via interceptors
+    try {
+      final response = await apiClient.get('/verify-token');
 
-    if (response['success'] == true) {
-      return UserModel.fromJson(response['data']['user']);
-    } else {
-      throw ServerException(response['message'] ?? 'Token verification failed');
+      if (response['success'] == true) {
+        return UserModel.fromJson(response['data']['user']);
+      } else {
+        throw ServerException(
+          response['message'] ?? 'Token verification failed',
+        );
+      }
+    } catch (e) {
+      throw ServerException('Token verification failed: $e');
     }
   }
 }

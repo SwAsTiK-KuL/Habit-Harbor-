@@ -143,6 +143,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           }
                           return null;
                         },
+                        labelText: '',
                       ),
                       const SizedBox(height: 16),
 
@@ -164,6 +165,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           }
                           return null;
                         },
+                        labelText: '',
                       ),
                       const SizedBox(height: 16),
 
@@ -184,6 +186,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 }
                                 return null;
                               },
+                              labelText: '',
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -201,6 +204,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 }
                                 return null;
                               },
+                              labelText: '',
                             ),
                           ),
                         ],
@@ -235,6 +239,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           }
                           return null;
                         },
+                        labelText: '',
                       ),
                       const SizedBox(height: 16),
 
@@ -267,6 +272,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           }
                           return null;
                         },
+                        labelText: '',
                       ),
                       const SizedBox(height: 32),
 

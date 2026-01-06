@@ -126,6 +126,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                           return null;
                         },
+                        labelText: '',
                       ),
                       const SizedBox(height: 16),
 
@@ -154,6 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                           return null;
                         },
+                        labelText: '',
                       ),
                       const SizedBox(height: 32),
 

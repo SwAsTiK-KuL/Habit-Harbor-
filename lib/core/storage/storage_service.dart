@@ -12,7 +12,7 @@ class StorageService {
     await _prefs.setString(_tokenKey, token);
   }
 
-  String? getToken() {
+  Future<String?> getToken() async {
     return _prefs.getString(_tokenKey);
   }
 

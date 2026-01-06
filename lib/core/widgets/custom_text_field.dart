@@ -26,6 +26,7 @@ class CustomTextField extends StatelessWidget {
     this.onChanged,
     this.maxLines = 1,
     this.enabled = true,
+    required String labelText,
   }) : super(key: key);
 
   @override

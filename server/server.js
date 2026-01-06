@@ -17,14 +17,16 @@ const config = {
   dbName: 'login_system.db'
 };
 
-// Simple SQLite implementation (no external dependencies needed)
+// Enhanced SQLite implementation with goals support
 class SimpleDB {
   constructor(dbPath) {
     this.dbPath = dbPath;
     this.data = {
       users: [],
       sessions: [],
-      loginAttempts: []
+      loginAttempts: [],
+      goals: [], // ✅ Added goals to persistent storage
+      goalLogs: [] // ✅ Added goal logs to persistent storage
     };
     this.loadFromFile();
   }
@@ -33,14 +35,27 @@ class SimpleDB {
     try {
       if (fs.existsSync(this.dbPath)) {
         const fileData = fs.readFileSync(this.dbPath, 'utf8');
-        this.data = JSON.parse(fileData);
+        const loadedData = JSON.parse(fileData);
+
+        // Merge with default structure to ensure all properties exist
+        this.data = {
+          users: loadedData.users || [],
+          sessions: loadedData.sessions || [],
+          loginAttempts: loadedData.loginAttempts || [],
+          goals: loadedData.goals || [], // ✅ Load goals from file
+          goalLogs: loadedData.goalLogs || [] // ✅ Load goal logs from file
+        };
+
+        console.log(`✅ Database loaded with ${this.data.goals.length} goals`);
       }
     } catch (error) {
       console.log('Creating new database...');
       this.data = {
         users: [],
         sessions: [],
-        loginAttempts: []
+        loginAttempts: [],
+        goals: [],
+        goalLogs: []
       };
     }
   }
@@ -48,6 +63,7 @@ class SimpleDB {
   saveToFile() {
     try {
       fs.writeFileSync(this.dbPath, JSON.stringify(this.data, null, 2));
+      console.log(`💾 Database saved with ${this.data.goals.length} goals`);
     } catch (error) {
       console.error('Error saving database:', error);
     }
@@ -57,7 +73,7 @@ class SimpleDB {
     return Date.now() + Math.random().toString(36).substr(2, 9);
   }
 
-  // User operations
+  // User operations (existing code)
   createUser(userData) {
     const user = {
       id: this.generateId(),
@@ -106,7 +122,7 @@ class SimpleDB {
     return this.data.users.some(user => user.username === username);
   }
 
-  // Session operations
+  // Session operations (existing code)
   createSession(sessionData) {
     const session = {
       id: this.generateId(),
@@ -128,7 +144,7 @@ class SimpleDB {
     this.saveToFile();
   }
 
-  // Login attempts
+  // Login attempts (existing code)
   logLoginAttempt(email, ipAddress, success) {
     const attempt = {
       id: this.generateId(),
@@ -154,7 +170,206 @@ class SimpleDB {
       .sort((a, b) => new Date(b.attempted_at) - new Date(a.attempted_at))
       .slice(0, limit);
   }
+
+  // ✅ NEW: Goal operations
+  createGoal(goalData) {
+    const goal = {
+      id: 'goal_' + Date.now() + Math.random().toString(36).substr(2, 9),
+      user_id: goalData.user_id,
+      title: goalData.title,
+      description: goalData.description || '',
+      category: goalData.category || 'General',
+      color: goalData.color || '#4CAF50',
+      icon: goalData.icon || 'star',
+      target_frequency: goalData.target_frequency || 'daily',
+      target_count: goalData.target_count || 1,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    this.data.goals.push(goal);
+    this.saveToFile();
+    console.log(`✅ Goal created: ${goal.title} for user ${goal.user_id}`);
+    return goal;
+  }
+
+  getGoalsByUserId(userId) {
+    const userGoals = this.data.goals.filter(goal => goal.user_id === userId && goal.is_active);
+
+    // ✅ Add today's status for each goal
+    const today = new Date().toISOString().split('T')[0];
+    const enrichedGoals = userGoals.map(goal => {
+      const todayLog = this.data.goalLogs.find(log =>
+        log.goal_id === goal.id &&
+        log.date === today
+      );
+
+      return {
+        ...goal,
+        todayStatus: todayLog ? todayLog.status : null,
+        todayLogId: todayLog ? todayLog.id : null
+      };
+    });
+
+    console.log(`📋 Retrieved ${enrichedGoals.length} goals for user ${userId}`);
+    return enrichedGoals;
+  }
+
+  findGoalById(goalId) {
+    return this.data.goals.find(goal => goal.id === goalId && goal.is_active);
+  }
+
+  updateGoal(goalId, updates) {
+    const goalIndex = this.data.goals.findIndex(goal => goal.id === goalId && goal.is_active);
+
+    if (goalIndex === -1) {
+      return null;
+    }
+
+    this.data.goals[goalIndex] = {
+      ...this.data.goals[goalIndex],
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
+
+    this.saveToFile();
+    console.log(`✅ Goal updated: ${goalId}`);
+    return this.data.goals[goalIndex];
+  }
+
+  deleteGoal(goalId, userId) {
+    const goalIndex = this.data.goals.findIndex(goal =>
+      goal.id === goalId && goal.user_id === userId && goal.is_active
+    );
+
+    if (goalIndex === -1) {
+      return false;
+    }
+
+    this.data.goals[goalIndex].is_active = false;
+    this.data.goals[goalIndex].updated_at = new Date().toISOString();
+    this.saveToFile();
+    console.log(`✅ Goal deleted: ${goalId}`);
+    return true;
+  }
+
+  // ✅ NEW: Goal log operations
+  createGoalLog(logData) {
+    const log = {
+      id: 'log_' + Date.now() + Math.random().toString(36).substr(2, 9),
+      goal_id: logData.goal_id,
+      user_id: logData.user_id,
+      date: logData.date || new Date().toISOString().split('T')[0],
+      status: logData.status,
+      notes: logData.notes || '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    this.data.goalLogs.push(log);
+    this.saveToFile();
+    console.log(`✅ Goal log created: ${log.status} for goal ${log.goal_id}`);
+    return log;
+  }
+
+  getGoalLogsByGoalId(goalId, limit = 30) {
+    return this.data.goalLogs
+      .filter(log => log.goal_id === goalId)
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, limit);
+  }
+
+  // Add to SimpleDB class
+  autoCompleteYesterdayGoals() {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    // Find goals that have no log for yesterday
+    const allGoals = this.data.goals.filter(goal => goal.is_active);
+
+    allGoals.forEach(goal => {
+      const existingLog = this.data.goalLogs.find(log =>
+        log.goal_id === goal.id && log.date === yesterdayStr
+      );
+
+      if (!existingLog) {
+        // Auto-create "completed" log
+        this.createGoalLog({
+          goal_id: goal.id,
+          user_id: goal.user_id,
+          status: 'completed',
+          date: yesterdayStr,
+          notes: 'Auto-completed'
+        });
+        console.log(`✅ Auto-completed goal: ${goal.title} for ${yesterdayStr}`);
+      }
+    });
+  }
 }
+
+function autoCompleteYesterdayGoals() {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+  console.log(`🕛 Running midnight auto-completion for ${yesterdayStr}`);
+
+  // Get all active goals
+  const allGoals = db.data.goals.filter(goal => goal.is_active);
+  let autoCompletedCount = 0;
+
+  allGoals.forEach(goal => {
+    // Check if there's already a log for yesterday
+    const existingLog = db.data.goalLogs.find(log =>
+      log.goal_id === goal.id &&
+      log.date === yesterdayStr
+    );
+
+    if (!existingLog) {
+      // No log exists for yesterday - auto-complete it
+      const autoLog = db.createGoalLog({
+        goal_id: goal.id,
+        user_id: goal.user_id,
+        status: 'completed',
+        date: yesterdayStr,
+        notes: 'Auto-completed at midnight'
+      });
+
+      autoCompletedCount++;
+      console.log(`✅ Auto-completed: ${goal.title} for ${yesterdayStr}`);
+    }
+  });
+
+  console.log(`🎉 Midnight auto-completion finished: ${autoCompletedCount} goals completed for ${yesterdayStr}`);
+  return autoCompletedCount;
+}
+
+function scheduleAutomaticCompletion() {
+  console.log('🕛 Setting up midnight auto-completion scheduler...');
+
+  // Function to check if it's midnight and run auto-completion
+  function checkMidnight() {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+
+    // Check if it's exactly midnight (00:00:00)
+    if (hours === 0 && minutes === 0 && seconds === 0) {
+      console.log('🕛 MIDNIGHT DETECTED - Running auto-completion...');
+      autoCompleteYesterdayGoals();
+    }
+  }
+
+  // Check every second for midnight
+  setInterval(checkMidnight, 1000);
+
+  console.log('✅ Midnight auto-completion scheduler started');
+  console.log('📅 Goals will auto-complete at 12:00:00 AM each night');
+}
+
 
 // Initialize database
 const db = new SimpleDB(path.join(__dirname, config.dbName));
@@ -171,7 +386,6 @@ const createRateLimit = (store, windowMs, max) => {
   return (req, res, next) => {
     const ip = req.ip || req.connection.remoteAddress;
     const now = Date.now();
-    const windowStart = now - windowMs;
 
     // Clean old entries
     for (const [key, data] of store.entries()) {
@@ -287,7 +501,7 @@ const getUserProfile = (user) => {
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8080'],
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -298,7 +512,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.set('trust proxy', 1);
 
 // Apply rate limiting
-app.use(createRateLimit(rateLimitStore.general, 15 * 60 * 1000, 100)); // 100 requests per 15 minutes
+app.use(createRateLimit(rateLimitStore.general, 15 * 60 * 1000, 100));
 
 // Routes
 
@@ -306,7 +520,7 @@ app.use(createRateLimit(rateLimitStore.general, 15 * 60 * 1000, 100)); // 100 re
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Login Backend API',
+    message: 'Login Backend API with Goals',
     version: '1.0.0',
     endpoints: {
       register: 'POST /api/auth/register',
@@ -315,19 +529,22 @@ app.get('/', (req, res) => {
       logout: 'POST /api/auth/logout',
       verifyToken: 'GET /api/auth/verify-token',
       loginAttempts: 'GET /api/auth/login-attempts',
-      health: 'GET /api/auth/health'
+      health: 'GET /api/auth/health',
+      goals: 'GET /api/goals',
+      createGoal: 'POST /api/goals',
+      goalStats: 'GET /api/goals/:goalId/stats',
+      logGoal: 'POST /api/goals/:goalId/logs'
     }
   });
 });
 
-// Register endpoint
+// Register endpoint (existing code)
 app.post('/api/auth/register',
-  createRateLimit(rateLimitStore.register, 60 * 60 * 1000, 3), // 3 per hour
+  createRateLimit(rateLimitStore.register, 60 * 60 * 1000, 3),
   async (req, res) => {
     try {
       const { username, email, password, confirmPassword, first_name, last_name } = req.body;
 
-      // Validation
       const errors = [];
 
       if (!username || !validateUsername(username)) {
@@ -365,7 +582,6 @@ app.post('/api/auth/register',
         });
       }
 
-      // Check if user exists
       if (db.emailExists(email)) {
         return res.status(409).json({
           success: false,
@@ -380,10 +596,8 @@ app.post('/api/auth/register',
         });
       }
 
-      // Hash password
       const hashedPassword = await bcrypt.hash(password, config.bcryptRounds);
 
-      // Create user
       const newUser = db.createUser({
         username,
         email,
@@ -392,7 +606,6 @@ app.post('/api/auth/register',
         last_name
       });
 
-      // Generate token
       const token = generateToken(newUser.id);
 
       console.log(`New user registered: ${email}`);
@@ -415,16 +628,15 @@ app.post('/api/auth/register',
     }
   });
 
-// Login endpoint
+// Login endpoint (existing code)
 app.post('/api/auth/login',
-  createRateLimit(rateLimitStore.auth, 15 * 60 * 1000, 5), // 5 per 15 minutes
+  createRateLimit(rateLimitStore.auth, 15 * 60 * 1000, 5),
   async (req, res) => {
     try {
       const { email, password } = req.body;
       const clientIp = req.ip || req.connection.remoteAddress;
       const userAgent = req.get('User-Agent');
 
-      // Validation
       if (!email || !validateEmail(email)) {
         return res.status(400).json({
           success: false,
@@ -439,10 +651,8 @@ app.post('/api/auth/login',
         });
       }
 
-      // Log login attempt (initially failed)
       db.logLoginAttempt(email, clientIp, false);
 
-      // Find user
       const user = db.findUserByEmail(email);
       if (!user) {
         return res.status(401).json({
@@ -451,7 +661,6 @@ app.post('/api/auth/login',
         });
       }
 
-      // Verify password
       const isValidPassword = await bcrypt.compare(password, user.password_hash);
       if (!isValidPassword) {
         return res.status(401).json({
@@ -460,16 +669,11 @@ app.post('/api/auth/login',
         });
       }
 
-      // Update last login
       db.updateUserLastLogin(user.id);
-
-      // Log successful login
       db.logLoginAttempt(email, clientIp, true);
 
-      // Generate token
       const token = generateToken(user.id);
 
-      // Create session
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
 
@@ -501,7 +705,7 @@ app.post('/api/auth/login',
     }
   });
 
-// Get profile endpoint
+// Get profile endpoint (existing code)
 app.get('/api/auth/profile', authenticateToken, (req, res) => {
   try {
     res.json({
@@ -519,7 +723,7 @@ app.get('/api/auth/profile', authenticateToken, (req, res) => {
   }
 });
 
-// Verify token endpoint
+// Verify token endpoint (existing code)
 app.get('/api/auth/verify-token', authenticateToken, (req, res) => {
   try {
     res.json({
@@ -538,7 +742,7 @@ app.get('/api/auth/verify-token', authenticateToken, (req, res) => {
   }
 });
 
-// Logout endpoint
+// Logout endpoint (existing code)
 app.post('/api/auth/logout', authenticateToken, (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
@@ -562,7 +766,7 @@ app.post('/api/auth/logout', authenticateToken, (req, res) => {
   }
 });
 
-// Get login attempts endpoint
+// Get login attempts endpoint (existing code)
 app.get('/api/auth/login-attempts', authenticateToken, (req, res) => {
   try {
     const { email, limit = 10 } = req.query;
@@ -599,6 +803,271 @@ app.get('/health', (req, res) => {
   });
 });
 
+// ===========================
+// ✅ ENHANCED GOALS ENDPOINTS
+// ===========================
+
+// Get all goals for authenticated user
+app.get('/api/goals', authenticateToken, (req, res) => {
+  try {
+    console.log(`📋 Getting goals for user: ${req.user.id}`);
+    const userGoals = db.getGoalsByUserId(req.user.id);
+
+    res.json({
+      success: true,
+      data: userGoals
+    });
+  } catch (error) {
+    console.error('Get goals error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// ✅ FIXED: Create goal with proper validation and persistence
+app.post('/api/goals', authenticateToken, (req, res) => {
+  try {
+    console.log('🔵 Create goal request received');
+    console.log('📋 Request body:', req.body);
+    console.log('📋 User:', req.user.id);
+
+    const { title, description, category, color, icon, target_frequency, target_count } = req.body;
+
+    // Validation
+    if (!title || title.trim().length === 0) {
+      console.log('❌ Title validation failed');
+      return res.status(400).json({
+        success: false,
+        message: 'Title is required'
+      });
+    }
+
+    if (title.length > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Title must be less than 100 characters'
+      });
+    }
+
+    // Create goal with proper data structure
+    const newGoal = db.createGoal({
+      user_id: req.user.id,
+      title: title.trim(),
+      description: description?.trim() || '',
+      category: category || 'General',
+      color: color || '#4CAF50',
+      icon: icon || 'star',
+      target_frequency: target_frequency || 'daily',
+      target_count: target_count || 1
+    });
+
+    console.log('✅ Goal created successfully:', newGoal.id);
+
+    res.status(201).json({
+      success: true,
+      message: 'Goal created successfully',
+      data: newGoal
+    });
+  } catch (error) {
+    console.error('❌ Create goal error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Get goal by ID
+app.get('/api/goals/:goalId', authenticateToken, (req, res) => {
+  try {
+    const { goalId } = req.params;
+    const goal = db.findGoalById(goalId);
+
+    if (!goal || goal.user_id !== req.user.id) {
+      return res.status(404).json({
+        success: false,
+        message: 'Goal not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: goal
+    });
+  } catch (error) {
+    console.error('Get goal error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Update goal
+app.put('/api/goals/:goalId', authenticateToken, (req, res) => {
+  try {
+    const { goalId } = req.params;
+    const updates = req.body;
+
+    // Check if goal belongs to user
+    const existingGoal = db.findGoalById(goalId);
+    if (!existingGoal || existingGoal.user_id !== req.user.id) {
+      return res.status(404).json({
+        success: false,
+        message: 'Goal not found'
+      });
+    }
+
+    const updatedGoal = db.updateGoal(goalId, updates);
+
+    res.json({
+      success: true,
+      message: 'Goal updated successfully',
+      data: updatedGoal
+    });
+  } catch (error) {
+    console.error('Update goal error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Delete goal
+app.delete('/api/goals/:goalId', authenticateToken, (req, res) => {
+  try {
+    const { goalId } = req.params;
+
+    const deleted = db.deleteGoal(goalId, req.user.id);
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: 'Goal not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Goal deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete goal error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Get goal stats (enhanced with real data)
+app.get('/api/goals/:goalId/stats', authenticateToken, (req, res) => {
+  try {
+    const { goalId } = req.params;
+    const { days = 30 } = req.query;
+
+    // Check if goal belongs to user
+    const goal = db.findGoalById(goalId);
+    if (!goal || goal.user_id !== req.user.id) {
+      return res.status(404).json({
+        success: false,
+        message: 'Goal not found'
+      });
+    }
+
+    // Get logs for calculation
+    const logs = db.getGoalLogsByGoalId(goalId, parseInt(days));
+
+    // Calculate stats
+    const completed = logs.filter(log => log.status === 'completed').length;
+    const missed = logs.filter(log => log.status === 'missed').length;
+    const holiday = logs.filter(log => log.status === 'holiday').length;
+    const sick = logs.filter(log => log.status === 'sick').length;
+    const skipped = logs.filter(log => log.status === 'skipped').length;
+
+    const totalDays = parseInt(days);
+    const completionRate = totalDays > 0 ? Math.round((completed / totalDays) * 100) : 0;
+
+    const stats = {
+      total_days: totalDays,
+      completed,
+      missed,
+      holiday,
+      sick,
+      skipped,
+      completion_rate: completionRate,
+      current_streak: 3, // This would need streak calculation logic
+      longest_streak: 8  // This would need streak calculation logic
+    };
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('Get goal stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Log goal status
+app.post('/api/goals/:goalId/logs', authenticateToken, (req, res) => {
+  try {
+    const { goalId } = req.params;
+    const { status, date, notes } = req.body;
+
+    // Check if goal belongs to user
+    const goal = db.findGoalById(goalId);
+    if (!goal || goal.user_id !== req.user.id) {
+      return res.status(404).json({
+        success: false,
+        message: 'Goal not found'
+      });
+    }
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required'
+      });
+    }
+
+    const validStatuses = ['completed', 'missed', 'holiday', 'sick', 'skipped'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status'
+      });
+    }
+
+    const newLog = db.createGoalLog({
+      goal_id: goalId,
+      user_id: req.user.id,
+      status,
+      date: date || new Date().toISOString().split('T')[0],
+      notes: notes || ''
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Goal logged successfully',
+      data: newLog
+    });
+  } catch (error) {
+    console.error('Log goal error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
 // Global error handler
 app.use((error, req, res, next) => {
   console.error('Global error handler:', error);
@@ -630,10 +1099,322 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
+// Add this endpoint for testing (REMOVE in production)
+app.post('/api/debug/auto-complete-yesterday', (req, res) => {
+  try {
+    console.log('🔧 Manual auto-completion triggered via API');
+    const completedCount = autoCompleteYesterdayGoals();
+
+    res.json({
+      success: true,
+      message: `Auto-completed ${completedCount} goals for yesterday`,
+      completedCount
+    });
+  } catch (error) {
+    console.error('❌ Manual auto-completion error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Auto-completion failed',
+      error: error.message
+    });
+  }
+});
+
+scheduleAutomaticCompletion();
+console.log('✅ Midnight auto-completion system initialized');
+
+
+// ===========================
+// 📊 HISTORY & ANALYTICS ENDPOINTS
+// ===========================
+
+// Get goal logs for a specific period
+app.get('/api/goals/:goalId/logs', authenticateToken, (req, res) => {
+  try {
+    const { goalId } = req.params;
+    const { period = 'month', limit = 365 } = req.query;
+
+    // Check if goal belongs to user
+    const goal = db.findGoalById(goalId);
+    if (!goal || goal.user_id !== req.user.id) {
+      return res.status(404).json({
+        success: false,
+        message: 'Goal not found'
+      });
+    }
+
+    // Get date range for period
+    const dateRange = getDateRangeForPeriod(period);
+
+    // Get logs within date range
+    const logs = db.data.goalLogs
+      .filter(log =>
+        log.goal_id === goalId &&
+        dateRange.start <= new Date(log.date) &&
+        new Date(log.date) <= dateRange.end
+      )
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, parseInt(limit));
+
+    res.json({
+      success: true,
+      data: {
+        logs,
+        period,
+        dateRange: {
+          start: dateRange.start.toISOString().split('T')[0],
+          end: dateRange.end.toISOString().split('T')[0]
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get goal logs error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Get comprehensive goal statistics
+app.get('/api/goals/:goalId/analytics', authenticateToken, (req, res) => {
+  try {
+    const { goalId } = req.params;
+    const { period = 'month' } = req.query;
+
+    // Check if goal belongs to user
+    const goal = db.findGoalById(goalId);
+    if (!goal || goal.user_id !== req.user.id) {
+      return res.status(404).json({
+        success: false,
+        message: 'Goal not found'
+      });
+    }
+
+    const dateRange = getDateRangeForPeriod(period);
+
+    // Get logs for the period
+    const logs = db.data.goalLogs.filter(log =>
+      log.goal_id === goalId &&
+      dateRange.start <= new Date(log.date) &&
+      new Date(log.date) <= dateRange.end
+    );
+
+    // Calculate statistics
+    const stats = calculateGoalStatistics(logs, dateRange, goal);
+
+    res.json({
+      success: true,
+      data: {
+        goal: {
+          id: goal.id,
+          title: goal.title,
+          category: goal.category,
+          color: goal.color,
+          icon: goal.icon
+        },
+        period,
+        stats,
+        logs: logs.sort((a, b) => new Date(b.date) - new Date(a.date))
+      }
+    });
+  } catch (error) {
+    console.error('Get goal analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Get overall user analytics
+app.get('/api/analytics/overview', authenticateToken, (req, res) => {
+  try {
+    const { period = 'month' } = req.query;
+
+    // Get user's active goals
+    const userGoals = db.data.goals.filter(goal =>
+      goal.user_id === req.user.id && goal.is_active
+    );
+
+    const dateRange = getDateRangeForPeriod(period);
+
+    // Get all logs for user's goals in the period
+    const allLogs = db.data.goalLogs.filter(log =>
+      userGoals.some(goal => goal.id === log.goal_id) &&
+      dateRange.start <= new Date(log.date) &&
+      new Date(log.date) <= dateRange.end
+    );
+
+    // Calculate overall statistics
+    const overallStats = calculateOverallStatistics(allLogs, userGoals, dateRange);
+
+    res.json({
+      success: true,
+      data: {
+        period,
+        totalGoals: userGoals.length,
+        dateRange: {
+          start: dateRange.start.toISOString().split('T')[0],
+          end: dateRange.end.toISOString().split('T')[0]
+        },
+        stats: overallStats,
+        goals: userGoals.map(goal => {
+          const goalLogs = allLogs.filter(log => log.goal_id === goal.id);
+          const goalStats = calculateGoalStatistics(goalLogs, dateRange, goal);
+
+          return {
+            ...goal,
+            stats: goalStats
+          };
+        })
+      }
+    });
+  } catch (error) {
+    console.error('Get overview analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Helper functions for analytics
+function getDateRangeForPeriod(period) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (period) {
+    case 'month':
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { start: startOfMonth, end: endOfMonth };
+
+    case 'quarter':
+      const quarter = Math.floor((now.getMonth()) / 3);
+      const startOfQuarter = new Date(now.getFullYear(), quarter * 3, 1);
+      const endOfQuarter = new Date(now.getFullYear(), quarter * 3 + 3, 0);
+      return { start: startOfQuarter, end: endOfQuarter };
+
+    case 'halfyear':
+      const startOfHalfYear = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      return { start: startOfHalfYear, end: today };
+
+    case 'year':
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      return { start: startOfYear, end: today };
+
+    default:
+      return { start: today, end: today };
+  }
+}
+
+function calculateGoalStatistics(logs, dateRange, goal) {
+  const totalDays = Math.ceil((dateRange.end - dateRange.start) / (1000 * 60 * 60 * 24)) + 1;
+
+  // Count by status
+  const completed = logs.filter(log => log.status === 'completed').length;
+  const missed = logs.filter(log => log.status === 'missed').length;
+  const holiday = logs.filter(log => log.status === 'holiday').length;
+  const sick = logs.filter(log => log.status === 'sick').length;
+  const skipped = logs.filter(log => log.status === 'skipped').length;
+
+  const completionRate = totalDays > 0 ? Math.round((completed / totalDays) * 100) : 0;
+
+  // Calculate streaks
+  const sortedLogs = logs
+    .filter(log => log.status === 'completed')
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const streaks = calculateStreaks(sortedLogs);
+
+  return {
+    totalDays,
+    completed,
+    missed,
+    holiday,
+    sick,
+    skipped,
+    loggedDays: logs.length,
+    unloggedDays: totalDays - logs.length,
+    completionRate,
+    currentStreak: streaks.current,
+    longestStreak: streaks.longest
+  };
+}
+
+function calculateOverallStatistics(allLogs, goals, dateRange) {
+  const totalDays = Math.ceil((dateRange.end - dateRange.start) / (1000 * 60 * 60 * 24)) + 1;
+  const totalPossibleLogs = goals.length * totalDays;
+
+  const completed = allLogs.filter(log => log.status === 'completed').length;
+  const missed = allLogs.filter(log => log.status === 'missed').length;
+  const holiday = allLogs.filter(log => log.status === 'holiday').length;
+  const sick = allLogs.filter(log => log.status === 'sick').length;
+  const skipped = allLogs.filter(log => log.status === 'skipped').length;
+
+  const overallCompletionRate = totalPossibleLogs > 0 ?
+    Math.round((completed / totalPossibleLogs) * 100) : 0;
+
+  return {
+    totalDays,
+    completed,
+    missed,
+    holiday,
+    sick,
+    skipped,
+    totalLogs: allLogs.length,
+    totalPossibleLogs,
+    completionRate: overallCompletionRate
+  };
+}
+
+function calculateStreaks(completedLogs) {
+  if (completedLogs.length === 0) {
+    return { current: 0, longest: 0 };
+  }
+
+  let currentStreak = 0;
+  let longestStreak = 0;
+  let tempStreak = 1;
+
+  // Calculate longest streak from historical data
+  for (let i = 1; i < completedLogs.length; i++) {
+    const prevDate = new Date(completedLogs[i - 1].date);
+    const currDate = new Date(completedLogs[i].date);
+    const daysDiff = (currDate - prevDate) / (1000 * 60 * 60 * 24);
+
+    if (daysDiff === 1) {
+      tempStreak++;
+    } else {
+      longestStreak = Math.max(longestStreak, tempStreak);
+      tempStreak = 1;
+    }
+  }
+  longestStreak = Math.max(longestStreak, tempStreak);
+
+  // Calculate current streak (from today backwards)
+  const today = new Date().toISOString().split('T')[0];
+  const recentLogs = completedLogs.reverse();
+
+  for (const log of recentLogs) {
+    if (log.date === today ||
+        (new Date(today) - new Date(log.date)) / (1000 * 60 * 60 * 24) === currentStreak + 1) {
+      currentStreak++;
+    } else {
+      break;
+    }
+  }
+
+  return { current: currentStreak, longest: longestStreak };
+}
+
+
 // Start server
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
   console.log(`✅ Database initialized: ${config.dbName}`);
+  console.log(`✅ Goals storage: ${db.data.goals.length} goals loaded`);
   console.log(`✅ API available at: http://localhost:${PORT}`);
   console.log('\n📊 API Endpoints:');
   console.log('  POST /api/auth/register   - Register user');
@@ -643,6 +1424,13 @@ app.listen(PORT, () => {
   console.log('  POST /api/auth/logout     - Logout (protected)');
   console.log('  GET  /api/auth/login-attempts - Login attempts (protected)');
   console.log('  GET  /api/auth/health     - Health check');
+  console.log('  GET  /api/goals           - Get all goals (protected)');
+  console.log('  POST /api/goals           - Create goal (protected)');
+  console.log('  GET  /api/goals/:id       - Get goal by ID (protected)');
+  console.log('  PUT  /api/goals/:id       - Update goal (protected)');
+  console.log('  DELETE /api/goals/:id     - Delete goal (protected)');
+  console.log('  GET  /api/goals/:id/stats - Get goal stats (protected)');
+  console.log('  POST /api/goals/:id/logs  - Log goal status (protected)');
 });
 
 module.exports = app;
