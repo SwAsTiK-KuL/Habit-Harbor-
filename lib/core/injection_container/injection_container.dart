@@ -7,6 +7,7 @@ import '../../application/auth/auth_bloc.dart';
 import '../../application/goal/goal_bloc.dart';
 import '../../domain/repository/auth_repository.dart';
 import '../../domain/repository/goals/goals_repository.dart';
+import '../../domain/usecases/analytics_usecase.dart';
 import '../../domain/usecases/create_goal_usecase.dart';
 import '../../domain/usecases/get_all_usecase.dart';
 import '../../domain/usecases/get_goals_status_usecase.dart';
@@ -37,7 +38,7 @@ Future<void> initializeDependencies() async {
   print('✅ SharedPreferences registered');
 
   // ✅ FIXED: Using your actual IP address from ipconfig
-  final String baseIp = '10.70.39.143'; // Your computer's actual IP
+  final String baseIp = '10.121.108.143'; // Your computer's actual IP
   final String alternativeIp = '10.0.2.2'; // Fallback to emulator mapping
   final int port = 3000;
 
@@ -230,6 +231,10 @@ Future<void> initializeDependencies() async {
   sl.registerLazySingleton(() => CreateGoalUseCase(sl()));
   sl.registerLazySingleton(() => LogGoalUseCase(sl()));
   sl.registerLazySingleton(() => GetGoalStatsUseCase(sl()));
+  sl.registerLazySingleton(() => GetOverviewAnalyticsUseCase(sl()));
+  sl.registerLazySingleton(() => GetGoalAnalyticsUseCase(sl()));
+  sl.registerLazySingleton(() => GetGoalLogsForPeriodUseCase(sl()));
+
   print('✅ Goal use cases registered');
 
   // BLoC - Auth
@@ -252,6 +257,9 @@ Future<void> initializeDependencies() async {
       logGoalUseCase: sl(),
       getGoalStatsUseCase: sl(),
       goalRepository: sl(),
+      getOverviewAnalyticsUseCase: sl(),
+      getGoalAnalyticsUseCase: sl(),
+      getGoalLogsForPeriodUseCase: sl(),
     ),
   );
   print('✅ GoalBloc registered');

@@ -58,4 +58,20 @@ abstract class GoalRepository {
   });
 
   Future<Either<Failure, void>> deleteGoalLog(String logId);
+
+  // Analytics endpoints
+  Future<Either<Failure, Map<String, dynamic>>> getOverviewAnalytics({
+    String period = 'month',
+  });
+
+  Future<Either<Failure, Map<String, dynamic>>> getGoalAnalytics({
+    required String goalId,
+    String period = 'month',
+  });
+
+  Future<Either<Failure, Map<String, dynamic>>> getGoalLogsForPeriod({
+    required String goalId,
+    String period = 'month',
+    int limit = 365,
+  });
 }

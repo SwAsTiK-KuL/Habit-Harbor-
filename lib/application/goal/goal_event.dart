@@ -126,3 +126,38 @@ class UpdateGoalLogStatus extends GoalEvent {
 class GoalErrorCleared extends GoalEvent {
   const GoalErrorCleared();
 }
+
+// ✅ NEW ANALYTICS EVENTS
+class LoadOverviewAnalytics extends GoalEvent {
+  final String period;
+
+  const LoadOverviewAnalytics({this.period = 'month'});
+
+  @override
+  List<Object?> get props => [period];
+}
+
+class LoadGoalAnalytics extends GoalEvent {
+  final String goalId;
+  final String period;
+
+  const LoadGoalAnalytics({required this.goalId, this.period = 'month'});
+
+  @override
+  List<Object?> get props => [goalId, period];
+}
+
+class LoadGoalLogsForPeriod extends GoalEvent {
+  final String goalId;
+  final String period;
+  final int limit;
+
+  const LoadGoalLogsForPeriod({
+    required this.goalId,
+    this.period = 'month',
+    this.limit = 365,
+  });
+
+  @override
+  List<Object?> get props => [goalId, period, limit];
+}

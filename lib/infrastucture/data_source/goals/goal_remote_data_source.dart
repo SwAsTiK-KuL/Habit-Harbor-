@@ -53,6 +53,18 @@ abstract class GoalRemoteDataSource {
   });
 
   Future<void> deleteGoalLog(String logId);
+
+  // Analytics methods
+  Future<Map<String, dynamic>> getOverviewAnalytics({String period = 'month'});
+  Future<Map<String, dynamic>> getGoalAnalytics({
+    required String goalId,
+    String period = 'month',
+  });
+  Future<Map<String, dynamic>> getGoalLogsForPeriod({
+    required String goalId,
+    String period = 'month',
+    int limit = 365,
+  });
 }
 
 class GoalRemoteDataSourceImpl implements GoalRemoteDataSource {
@@ -334,6 +346,109 @@ class GoalRemoteDataSourceImpl implements GoalRemoteDataSource {
     } on DioException catch (e) {
       throw NetworkException('Network error: ${e.message}');
     } catch (e) {
+      throw ServerException('Unexpected error: $e');
+    }
+  }
+
+  // ✅ NEW ANALYTICS METHODS
+  @override
+  Future<Map<String, dynamic>> getOverviewAnalytics({
+    String period = 'month',
+  }) async {
+    try {
+      print(
+        '📊 GoalRemoteDataSource: Fetching overview analytics for period: $period',
+      );
+
+      final response = await apiClient.get(
+        '/analytics/overview?period=$period',
+      );
+
+      print(
+        '✅ GoalRemoteDataSource: Received analytics response: ${response['success']}',
+      );
+
+      if (response['success'] == true) {
+        return response['data'] as Map<String, dynamic>;
+      } else {
+        throw ServerException(
+          response['message'] ?? 'Failed to fetch analytics',
+        );
+      }
+    } on DioException catch (e) {
+      print('❌ Network error fetching analytics: ${e.message}');
+      throw NetworkException('Network error: ${e.message}');
+    } catch (e) {
+      print('❌ Unexpected error fetching analytics: $e');
+      throw ServerException('Unexpected error: $e');
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> getGoalAnalytics({
+    required String goalId,
+    String period = 'month',
+  }) async {
+    try {
+      print(
+        '📊 GoalRemoteDataSource: Fetching goal analytics for $goalId, period: $period',
+      );
+
+      final response = await apiClient.get(
+        '/goals/$goalId/analytics?period=$period',
+      );
+
+      print(
+        '✅ GoalRemoteDataSource: Received goal analytics response: ${response['success']}',
+      );
+
+      if (response['success'] == true) {
+        return response['data'] as Map<String, dynamic>;
+      } else {
+        throw ServerException(
+          response['message'] ?? 'Failed to fetch goal analytics',
+        );
+      }
+    } on DioException catch (e) {
+      print('❌ Network error fetching goal analytics: ${e.message}');
+      throw NetworkException('Network error: ${e.message}');
+    } catch (e) {
+      print('❌ Unexpected error fetching goal analytics: $e');
+      throw ServerException('Unexpected error: $e');
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>> getGoalLogsForPeriod({
+    required String goalId,
+    String period = 'month',
+    int limit = 365,
+  }) async {
+    try {
+      print(
+        '📊 GoalRemoteDataSource: Fetching goal logs for $goalId, period: $period',
+      );
+
+      final response = await apiClient.get(
+        '/goals/$goalId/logs?period=$period&limit=$limit',
+      );
+
+      print(
+        '✅ GoalRemoteDataSource: Received goal logs response: ${response['success']}',
+      );
+
+      if (response['success'] == true) {
+        return response['data'] as Map<String, dynamic>;
+      } else {
+        throw ServerException(
+          response['message'] ?? 'Failed to fetch goal logs',
+        );
+      }
+    } on DioException catch (e) {
+      print('❌ Network error fetching goal logs: ${e.message}');
+      throw NetworkException('Network error: ${e.message}');
+    } catch (e) {
+      print('❌ Unexpected error fetching goal logs: $e');
       throw ServerException('Unexpected error: $e');
     }
   }

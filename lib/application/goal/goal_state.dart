@@ -113,3 +113,57 @@ class GoalValidationError extends GoalState {
   @override
   List<Object?> get props => [fieldErrors];
 }
+
+// ✅ NEW ANALYTICS STATES
+class AnalyticsLoading extends GoalState {
+  const AnalyticsLoading();
+}
+
+class OverviewAnalyticsLoaded extends GoalState {
+  final Map<String, dynamic> data;
+  final String period;
+
+  const OverviewAnalyticsLoaded({required this.data, required this.period});
+
+  @override
+  List<Object?> get props => [data, period];
+}
+
+class GoalAnalyticsLoaded extends GoalState {
+  final String goalId;
+  final Map<String, dynamic> data;
+  final String period;
+
+  const GoalAnalyticsLoaded({
+    required this.goalId,
+    required this.data,
+    required this.period,
+  });
+
+  @override
+  List<Object?> get props => [goalId, data, period];
+}
+
+class GoalLogsForPeriodLoaded extends GoalState {
+  final String goalId;
+  final Map<String, dynamic> data;
+  final String period;
+
+  const GoalLogsForPeriodLoaded({
+    required this.goalId,
+    required this.data,
+    required this.period,
+  });
+
+  @override
+  List<Object?> get props => [goalId, data, period];
+}
+
+class AnalyticsError extends GoalState {
+  final String message;
+
+  const AnalyticsError({required this.message});
+
+  @override
+  List<Object?> get props => [message];
+}

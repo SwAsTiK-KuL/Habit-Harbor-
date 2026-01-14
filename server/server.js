@@ -17,36 +17,173 @@ const config = {
   dbName: 'login_system.db'
 };
 
+//Auto Completion Manager Class
+class AutoCompletionManager {
+  constructor(db) {
+    this.db = db;
+    this.lastProcessedDate = null;
+    this.isProcessing = false;
+  }
+
+  loadLastProcessedDate() {
+    const metaData = this.db.data.metadata || {};
+    this.lastProcessedDate = metaData.lastAutoCompletionDate || null;
+    console.log(`📅 Last auto-completion: ${this.lastProcessedDate || 'Never'}`);
+  }
+
+  saveLastProcessedDate(date) {
+    if (!this.db.data.metadata) {
+      this.db.data.metadata = {};
+    }
+    this.db.data.metadata.lastAutoCompletionDate = date;
+    this.db.saveToFile();
+    this.lastProcessedDate = date;
+  }
+
+  getYesterdayDate() {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  }
+
+  addDays(dateStr, days) {
+    const date = new Date(dateStr);
+    date.setDate(date.getDate() + days);
+    return date.toISOString().split('T')[0];
+  }
+
+  processDate(dateStr) {
+    console.log(`🕛 Processing auto-completion for ${dateStr}`);
+
+    const allGoals = this.db.data.goals.filter(goal => goal.is_active);
+    let completedCount = 0;
+
+    allGoals.forEach(goal => {
+      const goalCreatedDate = goal.created_at.split('T')[0];
+      if (goalCreatedDate > dateStr) {
+        return;
+      }
+
+      const existingLog = this.db.data.goalLogs.find(log =>
+        log.goal_id === goal.id &&
+        log.date === dateStr
+      );
+
+      if (!existingLog) {
+        this.db.createGoalLog({
+          goal_id: goal.id,
+          user_id: goal.user_id,
+          status: 'completed',
+          date: dateStr,
+          notes: 'Auto-marked as completed'
+        });
+
+        completedCount++;
+      }
+    });
+
+    console.log(`✅ Processed ${dateStr}: ${missedCount} goals auto-missed`);
+    return missedCount;
+  }
+
+  processMissedDays() {
+    const today = new Date().toISOString().split('T')[0];
+
+    if (this.lastProcessedDate === null) {
+      // First run - only process yesterday
+      const yesterday = this.getYesterdayDate();
+      this.processDate(yesterday);
+      this.saveLastProcessedDate(today);
+      return;
+    }
+
+    // ✅ Process all dates between lastProcessedDate and yesterday
+    const yesterday = this.getYesterdayDate();
+    let currentDate = this.addDays(this.lastProcessedDate, 1);
+
+    while (currentDate <= yesterday) {
+      console.log(`📅 Catching up missed date: ${currentDate}`);
+      this.processDate(currentDate);
+      currentDate = this.addDays(currentDate, 1);
+    }
+
+    this.saveLastProcessedDate(today);
+  }
+
+  startScheduler() {
+    console.log('🕛 Starting auto-completion scheduler...');
+
+    this.loadLastProcessedDate();
+
+    // ✅ Check every hour (low CPU usage)
+    setInterval(() => {
+      if (this.isProcessing) return;
+
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+
+      // Run once per day between midnight and 1 AM
+      if (this.lastProcessedDate !== today && now.getHours() === 0) {
+        this.isProcessing = true;
+        try {
+          this.processMissedDays();
+        } catch (error) {
+          console.error('❌ Auto-completion error:', error);
+        } finally {
+          this.isProcessing = false;
+        }
+      }
+    }, 3600000); // Check every hour
+
+    // ✅ Run on startup to catch up
+    setTimeout(() => {
+      if (!this.isProcessing) {
+        this.isProcessing = true;
+        try {
+          this.processMissedDays();
+        } catch (error) {
+          console.error('❌ Startup auto-completion error:', error);
+        } finally {
+          this.isProcessing = false;
+        }
+      }
+    }, 5000);
+
+    console.log('✅ Auto-completion scheduler initialized');
+  }
+}
+
+
 // Enhanced SQLite implementation with goals support
 class SimpleDB {
   constructor(dbPath) {
-    this.dbPath = dbPath;
-    this.data = {
-      users: [],
-      sessions: [],
-      loginAttempts: [],
-      goals: [], // ✅ Added goals to persistent storage
-      goalLogs: [] // ✅ Added goal logs to persistent storage
-    };
-    this.loadFromFile();
+      this.dbPath = dbPath;
+      this.data = {
+        users: [],
+        sessions: [],
+        loginAttempts: [],
+        goals: [],
+        goalLogs: [],
+        metadata: {} // ✅ Add this
+      };
+      this.loadFromFile();
   }
 
-  loadFromFile() {
+
+loadFromFile() {
     try {
       if (fs.existsSync(this.dbPath)) {
         const fileData = fs.readFileSync(this.dbPath, 'utf8');
         const loadedData = JSON.parse(fileData);
 
-        // Merge with default structure to ensure all properties exist
         this.data = {
           users: loadedData.users || [],
           sessions: loadedData.sessions || [],
           loginAttempts: loadedData.loginAttempts || [],
-          goals: loadedData.goals || [], // ✅ Load goals from file
-          goalLogs: loadedData.goalLogs || [] // ✅ Load goal logs from file
+          goals: loadedData.goals || [],
+          goalLogs: loadedData.goalLogs || [],
+          metadata: loadedData.metadata || {} // ✅ Add this
         };
-
-        console.log(`✅ Database loaded with ${this.data.goals.length} goals`);
       }
     } catch (error) {
       console.log('Creating new database...');
@@ -55,7 +192,8 @@ class SimpleDB {
         sessions: [],
         loginAttempts: [],
         goals: [],
-        goalLogs: []
+        goalLogs: [],
+        metadata: {}
       };
     }
   }
@@ -280,33 +418,6 @@ class SimpleDB {
       .slice(0, limit);
   }
 
-  // Add to SimpleDB class
-  autoCompleteYesterdayGoals() {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-    // Find goals that have no log for yesterday
-    const allGoals = this.data.goals.filter(goal => goal.is_active);
-
-    allGoals.forEach(goal => {
-      const existingLog = this.data.goalLogs.find(log =>
-        log.goal_id === goal.id && log.date === yesterdayStr
-      );
-
-      if (!existingLog) {
-        // Auto-create "completed" log
-        this.createGoalLog({
-          goal_id: goal.id,
-          user_id: goal.user_id,
-          status: 'completed',
-          date: yesterdayStr,
-          notes: 'Auto-completed'
-        });
-        console.log(`✅ Auto-completed goal: ${goal.title} for ${yesterdayStr}`);
-      }
-    });
-  }
 }
 
 function autoCompleteYesterdayGoals() {
@@ -346,33 +457,13 @@ function autoCompleteYesterdayGoals() {
   return autoCompletedCount;
 }
 
-function scheduleAutomaticCompletion() {
-  console.log('🕛 Setting up midnight auto-completion scheduler...');
-
-  // Function to check if it's midnight and run auto-completion
-  function checkMidnight() {
-    const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const seconds = now.getSeconds();
-
-    // Check if it's exactly midnight (00:00:00)
-    if (hours === 0 && minutes === 0 && seconds === 0) {
-      console.log('🕛 MIDNIGHT DETECTED - Running auto-completion...');
-      autoCompleteYesterdayGoals();
-    }
-  }
-
-  // Check every second for midnight
-  setInterval(checkMidnight, 1000);
-
-  console.log('✅ Midnight auto-completion scheduler started');
-  console.log('📅 Goals will auto-complete at 12:00:00 AM each night');
-}
 
 
 // Initialize database
 const db = new SimpleDB(path.join(__dirname, config.dbName));
+
+const autoCompletionManager = new AutoCompletionManager(db);
+autoCompletionManager.startScheduler();
 
 // Rate limiting store
 const rateLimitStore = {
@@ -1103,13 +1194,73 @@ process.on('unhandledRejection', (reason, promise) => {
 app.post('/api/debug/auto-complete-yesterday', (req, res) => {
   try {
     console.log('🔧 Manual auto-completion triggered via API');
-    const completedCount = autoCompleteYesterdayGoals();
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    console.log(`📅 Processing date: ${yesterdayStr}`);
+
+    // Get all active goals
+    const allGoals = db.data.goals.filter(goal => goal.is_active);
+    console.log(`📊 Total active goals in database: ${allGoals.length}`);
+
+    let autoCompletedCount = 0;
+
+    allGoals.forEach(goal => {
+      console.log(`\n🎯 Checking Goal: "${goal.title}"`);
+      console.log(`   Goal ID: ${goal.id}`);
+      console.log(`   User ID: ${goal.user_id}`);
+      console.log(`   Created: ${goal.created_at.split('T')[0]}`);
+      console.log(`   Looking for date: ${yesterdayStr}`);
+
+      // Check if goal existed on yesterday
+      const goalCreatedDate = goal.created_at.split('T')[0];
+      if (goalCreatedDate > yesterdayStr) {
+        console.log(`   ⏭️  SKIPPED: Goal created AFTER ${yesterdayStr}`);
+        return;
+      }
+
+      // Check if there's already a log for yesterday
+      const existingLog = db.data.goalLogs.find(log =>
+        log.goal_id === goal.id &&
+        log.date === yesterdayStr
+      );
+
+      if (existingLog) {
+        console.log(`   ⏭️  SKIPPED: Already logged as "${existingLog.status}" for ${yesterdayStr}`);
+        return;
+      }
+
+      // No log exists for yesterday - auto-complete it as "missed"
+      const autoLog = db.createGoalLog({
+        goal_id: goal.id,
+        user_id: goal.user_id,
+        status: 'completed',
+        date: yesterdayStr,
+        notes: 'Auto-marked as Completed'
+      });
+
+      autoCompletedCount++;
+      console.log(`   ✅ SUCCESS: Auto-marked as MISSED for ${yesterdayStr}`);
+    });
+
+    console.log(`\n🎉 SUMMARY: ${autoCompletedCount} goals auto-missed for ${yesterdayStr}`);
+    console.log(`📊 Total goals processed: ${allGoals.length}`);
+    console.log(`✅ Goals auto-missed: ${autoCompletedCount}`);
+    console.log(`⏭️  Goals skipped: ${allGoals.length - autoCompletedCount}`);
 
     res.json({
       success: true,
-      message: `Auto-completed ${completedCount} goals for yesterday`,
-      completedCount
+      message: `Auto-completed ${autoCompletedCount} goals for yesterday`,
+      data: {
+        date: yesterdayStr,
+        completedCount: autoCompletedCount,
+        totalGoals: allGoals.length,
+        skipped: allGoals.length - autoCompletedCount
+      }
     });
+
   } catch (error) {
     console.error('❌ Manual auto-completion error:', error);
     res.status(500).json({
@@ -1119,9 +1270,6 @@ app.post('/api/debug/auto-complete-yesterday', (req, res) => {
     });
   }
 });
-
-scheduleAutomaticCompletion();
-console.log('✅ Midnight auto-completion system initialized');
 
 
 // ===========================

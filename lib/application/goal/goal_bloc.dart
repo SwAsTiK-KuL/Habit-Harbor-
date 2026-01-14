@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/failures/failures.dart';
 import '../../domain/repository/goals/goals_repository.dart';
+import '../../domain/usecases/analytics_usecase.dart';
 import '../../domain/usecases/create_goal_usecase.dart';
 import '../../domain/usecases/get_all_usecase.dart';
 import '../../domain/usecases/get_goals_status_usecase.dart';
@@ -16,6 +17,11 @@ class GoalBloc extends Bloc<GoalEvent, GoalState> {
   final GetGoalStatsUseCase getGoalStatsUseCase;
   final GoalRepository goalRepository;
 
+  // ✅ Analytics use cases
+  final GetOverviewAnalyticsUseCase getOverviewAnalyticsUseCase;
+  final GetGoalAnalyticsUseCase getGoalAnalyticsUseCase;
+  final GetGoalLogsForPeriodUseCase getGoalLogsForPeriodUseCase;
+
   List<Goal> _currentGoals = [];
 
   GoalBloc({
@@ -24,6 +30,9 @@ class GoalBloc extends Bloc<GoalEvent, GoalState> {
     required this.logGoalUseCase,
     required this.getGoalStatsUseCase,
     required this.goalRepository,
+    required this.getOverviewAnalyticsUseCase,
+    required this.getGoalAnalyticsUseCase,
+    required this.getGoalLogsForPeriodUseCase,
   }) : super(const GoalInitial()) {
     on<LoadGoals>(_onLoadGoals);
     on<CreateGoal>(_onCreateGoal);
@@ -33,6 +42,11 @@ class GoalBloc extends Bloc<GoalEvent, GoalState> {
     on<LoadGoalStats>(_onLoadGoalStats);
     on<UpdateGoalLogStatus>(_onUpdateGoalLogStatus);
     on<GoalErrorCleared>(_onGoalErrorCleared);
+
+    // ✅ Analytics event handlers
+    on<LoadOverviewAnalytics>(_onLoadOverviewAnalytics);
+    on<LoadGoalAnalytics>(_onLoadGoalAnalytics);
+    on<LoadGoalLogsForPeriod>(_onLoadGoalLogsForPeriod);
   }
 
   Future<void> _onLoadGoals(LoadGoals event, Emitter<GoalState> emit) async {
@@ -278,6 +292,106 @@ class GoalBloc extends Bloc<GoalEvent, GoalState> {
     } else {
       emit(const GoalInitial());
     }
+  }
+
+  // ✅ ANALYTICS EVENT HANDLERS
+  Future<void> _onLoadOverviewAnalytics(
+    LoadOverviewAnalytics event,
+    Emitter<GoalState> emit,
+  ) async {
+    emit(const AnalyticsLoading());
+
+    print(
+      '📊 GoalBloc: Loading overview analytics for period: ${event.period}',
+    );
+
+    final result = await getOverviewAnalyticsUseCase(
+      OverviewAnalyticsParams(period: event.period),
+    );
+
+    result.fold(
+      (failure) {
+        print(
+          '❌ GoalBloc: Failed to load overview analytics: ${_getFailureMessage(failure)}',
+        );
+        emit(AnalyticsError(message: _getFailureMessage(failure)));
+      },
+      (data) {
+        print('✅ GoalBloc: Overview analytics loaded successfully');
+        emit(OverviewAnalyticsLoaded(data: data, period: event.period));
+      },
+    );
+  }
+
+  Future<void> _onLoadGoalAnalytics(
+    LoadGoalAnalytics event,
+    Emitter<GoalState> emit,
+  ) async {
+    // Don't emit loading state here to avoid interfering with overview loading
+    print(
+      '📊 GoalBloc: Loading goal analytics for ${event.goalId}, period: ${event.period}',
+    );
+
+    final result = await getGoalAnalyticsUseCase(
+      GoalAnalyticsParams(goalId: event.goalId, period: event.period),
+    );
+
+    result.fold(
+      (failure) {
+        print(
+          '❌ GoalBloc: Failed to load goal analytics: ${_getFailureMessage(failure)}',
+        );
+        emit(AnalyticsError(message: _getFailureMessage(failure)));
+      },
+      (data) {
+        print(
+          '✅ GoalBloc: Goal analytics loaded successfully for ${event.goalId}',
+        );
+        emit(
+          GoalAnalyticsLoaded(
+            goalId: event.goalId,
+            data: data,
+            period: event.period,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _onLoadGoalLogsForPeriod(
+    LoadGoalLogsForPeriod event,
+    Emitter<GoalState> emit,
+  ) async {
+    print(
+      '📊 GoalBloc: Loading goal logs for ${event.goalId}, period: ${event.period}',
+    );
+
+    final result = await getGoalLogsForPeriodUseCase(
+      GoalLogsForPeriodParams(
+        goalId: event.goalId,
+        period: event.period,
+        limit: event.limit,
+      ),
+    );
+
+    result.fold(
+      (failure) {
+        print(
+          '❌ GoalBloc: Failed to load goal logs: ${_getFailureMessage(failure)}',
+        );
+        emit(AnalyticsError(message: _getFailureMessage(failure)));
+      },
+      (data) {
+        print('✅ GoalBloc: Goal logs loaded successfully');
+        emit(
+          GoalLogsForPeriodLoaded(
+            goalId: event.goalId,
+            data: data,
+            period: event.period,
+          ),
+        );
+      },
+    );
   }
 
   String _getFailureMessage(Failure failure) {

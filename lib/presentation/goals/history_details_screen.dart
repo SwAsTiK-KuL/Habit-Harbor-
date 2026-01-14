@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../application/goal/goal_bloc.dart';
 import '../../application/goal/goal_event.dart';
 import '../../application/goal/goal_state.dart';
-import '../../core/network/api_client.dart';
 import '../../domain/entities/goals/goals_log.dart';
 import '../../infrastucture/models/goals/goal.dart';
 
@@ -20,11 +19,9 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
   late TabController _tabController;
   String _selectedPeriod = 'month';
 
-  // Real data from server
+  // Store analytics data from BLoC
   Map<String, dynamic>? _overviewData;
   Map<String, Map<String, dynamic>> _goalAnalytics = {};
-  bool _isLoading = true;
-  String? _error;
 
   @override
   void initState() {
@@ -48,72 +45,48 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       if (newPeriod != _selectedPeriod) {
         setState(() {
           _selectedPeriod = newPeriod;
+          _overviewData = null;
+          _goalAnalytics.clear();
         });
         _loadAnalyticsData();
       }
     }
   }
 
-  Future<void> _loadAnalyticsData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+  void _loadAnalyticsData() {
+    // Load overview analytics using BLoC
+    context.read<GoalBloc>().add(
+      LoadOverviewAnalytics(period: _selectedPeriod),
+    );
+  }
 
-    try {
-      final apiClient = ApiClient();
-
-      // Fetch overview analytics
-      final overviewResponse = await apiClient.get(
-        '/analytics/overview?period=$_selectedPeriod',
+  void _loadGoalAnalytics(List<Goal> goals) {
+    // Load individual goal analytics for each goal
+    for (final goal in goals) {
+      context.read<GoalBloc>().add(
+        LoadGoalAnalytics(goalId: goal.id, period: _selectedPeriod),
       );
-
-      if (overviewResponse['success'] == true) {
-        setState(() {
-          _overviewData = overviewResponse['data'];
-          _isLoading = false;
-        });
-
-        // Load detailed analytics for each goal
-        await _loadGoalAnalytics();
-      } else {
-        setState(() {
-          _error = overviewResponse['message'] ?? 'Failed to load analytics';
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _error = 'Network error: ${e.toString()}';
-        _isLoading = false;
-      });
-      print('❌ Error loading analytics: $e');
     }
   }
 
-  Future<void> _loadGoalAnalytics() async {
-    if (_overviewData == null || _overviewData!['goals'] == null) return;
-
-    final goals = _overviewData!['goals'] as List<dynamic>;
-
-    for (final goal in goals) {
-      try {
-        final goalId = goal['id'] as String;
-        final apiClient = ApiClient();
-
-        final response = await apiClient.get(
-          '/goals/$goalId/analytics?period=$_selectedPeriod',
-        );
-
-        if (response['success'] == true) {
-          setState(() {
-            _goalAnalytics[goalId] = response['data'];
-          });
-        }
-      } catch (e) {
-        print('❌ Error loading goal analytics for ${goal['id']}: $e');
-      }
-    }
+  // Helper method to convert JSON to Goal using your existing structure
+  Goal _goalFromJson(Map<String, dynamic> json) {
+    return Goal(
+      id: json['id'] as String,
+      userId: json['user_id'] as String,
+      title: json['title'] as String,
+      description: json['description'] as String? ?? '',
+      category: json['category'] as String? ?? 'General',
+      color: json['color'] as String? ?? '#4CAF50',
+      icon: json['icon'] as String? ?? 'star',
+      targetFrequency: json['target_frequency'] as String? ?? 'daily',
+      targetCount: json['target_count'] as int? ?? 1,
+      isActive: json['is_active'] as bool? ?? true,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: DateTime.parse(json['updated_at'] as String),
+      todayStatus: json['todayStatus'] as String?,
+      todayLogId: json['todayLogId'] as String?,
+    );
   }
 
   @override
@@ -129,44 +102,70 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
           ),
         ],
       ),
-      body:
-          _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-              ? _buildErrorState()
-              : _overviewData == null
-              ? _buildEmptyState()
-              : _buildContent(),
-    );
-  }
+      body: BlocConsumer<GoalBloc, GoalState>(
+        listener: (context, state) {
+          if (state is OverviewAnalyticsLoaded) {
+            setState(() {
+              _overviewData = state.data;
+            });
 
-  Widget _buildContent() {
-    final goals =
-        (_overviewData!['goals'] as List<dynamic>)
-            .map((g) => Goal.fromJson(g))
-            .toList();
+            // Extract goals and load their individual analytics
+            final goals =
+                (_overviewData!['goals'] as List<dynamic>)
+                    .map((g) => _goalFromJson(g))
+                    .toList();
+            _loadGoalAnalytics(goals);
+          } else if (state is GoalAnalyticsLoaded) {
+            setState(() {
+              _goalAnalytics[state.goalId] = state.data;
+            });
+          } else if (state is AnalyticsError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+        builder: (context, state) {
+          if (state is AnalyticsLoading && _overviewData == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-    return Column(
-      children: [
-        // Summary Stats Card
-        _buildSummaryStats(),
+          if (_overviewData == null) {
+            return _buildEmptyState();
+          }
 
-        // Period Tabs
-        _buildPeriodTabs(),
+          final goals =
+              (_overviewData!['goals'] as List<dynamic>)
+                  .map((g) => _goalFromJson(g))
+                  .toList();
 
-        // Goals List with Real Stats
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
+          return Column(
             children: [
-              _buildGoalsList(goals, 'month'),
-              _buildGoalsList(goals, 'quarter'),
-              _buildGoalsList(goals, 'halfyear'),
-              _buildGoalsList(goals, 'year'),
+              // Summary Stats Card
+              _buildSummaryStats(),
+
+              // Period Tabs
+              _buildPeriodTabs(),
+
+              // Goals List with Real Stats
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildGoalsList(goals, 'month'),
+                    _buildGoalsList(goals, 'quarter'),
+                    _buildGoalsList(goals, 'halfyear'),
+                    _buildGoalsList(goals, 'year'),
+                  ],
+                ),
+              ),
             ],
-          ),
-        ),
-      ],
+          );
+        },
+      ),
     );
   }
 
@@ -276,7 +275,9 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
 
   Widget _buildGoalsList(List<Goal> goals, String period) {
     return RefreshIndicator(
-      onRefresh: _loadAnalyticsData,
+      onRefresh: () async {
+        _loadAnalyticsData();
+      },
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: goals.length,
@@ -297,9 +298,50 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       // Default color if parsing fails
     }
 
-    // Extract real stats from server data
-    final stats = analytics?['stats'] as Map<String, dynamic>? ?? {};
-    final logs = analytics?['logs'] as List<dynamic>? ?? [];
+    // Extract real stats from server data or show loading
+    if (analytics == null) {
+      return Card(
+        margin: const EdgeInsets.only(bottom: 16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: goalColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  _getGoalIcon(goal.icon),
+                  color: goalColor,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  goal.title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final stats = analytics['stats'] as Map<String, dynamic>? ?? {};
+    final logs = analytics['logs'] as List<dynamic>? ?? [];
 
     final completed = stats['completed'] ?? 0;
     final totalDays = stats['totalDays'] ?? 1;
@@ -594,37 +636,6 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     );
   }
 
-  Widget _buildErrorState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline, size: 80, color: Colors.red[400]),
-          const SizedBox(height: 16),
-          Text(
-            'Failed to Load History',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.red[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _error ?? 'Unknown error occurred',
-            style: TextStyle(color: Colors.grey[600]),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _loadAnalyticsData,
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -744,27 +755,5 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       default:
         return Colors.grey[300]!;
     }
-  }
-}
-
-// Extension to add fromJson to Goal if not already present
-extension GoalFromJson on Goal {
-  static Goal fromJson(Map<String, dynamic> json) {
-    return Goal(
-      id: json['id'],
-      userId: json['user_id'],
-      title: json['title'],
-      description: json['description'] ?? '',
-      category: json['category'] ?? 'General',
-      color: json['color'] ?? '#4CAF50',
-      icon: json['icon'] ?? 'star',
-      targetFrequency: json['target_frequency'] ?? 'daily',
-      targetCount: json['target_count'] ?? 1,
-      isActive: json['is_active'] ?? true,
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
-      todayStatus: json['todayStatus'],
-      todayLogId: json['todayLogId'],
-    );
   }
 }

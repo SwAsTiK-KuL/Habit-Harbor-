@@ -51,7 +51,7 @@ class GoalStatsModel {
     };
   }
 
-  // ✅ CRITICAL: This method converts model to entity
+  // Convert to domain entity
   GoalStats toEntity() {
     return GoalStats(
       totalDays: totalDays,
@@ -66,6 +66,7 @@ class GoalStatsModel {
     );
   }
 
+  // Create from domain entity
   factory GoalStatsModel.fromEntity(GoalStats stats) {
     return GoalStatsModel(
       totalDays: stats.totalDays,

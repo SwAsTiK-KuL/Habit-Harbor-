@@ -2,8 +2,9 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  static const String defaultAuthBaseUrl = 'http://10.70.39.143:3000/api/auth';
-  static const String defaultGoalsBaseUrl = 'http://10.70.39.143:3000/api';
+  static const String defaultAuthBaseUrl =
+      'http://10.121.108.143:3000/api/auth';
+  static const String defaultGoalsBaseUrl = 'http://10.121.108.143:3000/api';
   static const String authTokenKey = 'auth_token';
 
   late Dio _dio;

@@ -232,4 +232,65 @@ class GoalRepositoryImpl implements GoalRepository {
       return Left(ServerFailure('Unexpected error occurred'));
     }
   }
+
+  // ✅ NEW ANALYTICS IMPLEMENTATIONS
+  @override
+  Future<Either<Failure, Map<String, dynamic>>> getOverviewAnalytics({
+    String period = 'month',
+  }) async {
+    try {
+      final analytics = await remoteDataSource.getOverviewAnalytics(
+        period: period,
+      );
+      return Right(analytics);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    } catch (e) {
+      return Left(ServerFailure('Unexpected error occurred'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Map<String, dynamic>>> getGoalAnalytics({
+    required String goalId,
+    String period = 'month',
+  }) async {
+    try {
+      final analytics = await remoteDataSource.getGoalAnalytics(
+        goalId: goalId,
+        period: period,
+      );
+      return Right(analytics);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    } catch (e) {
+      return Left(ServerFailure('Unexpected error occurred'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Map<String, dynamic>>> getGoalLogsForPeriod({
+    required String goalId,
+    String period = 'month',
+    int limit = 365,
+  }) async {
+    try {
+      final logs = await remoteDataSource.getGoalLogsForPeriod(
+        goalId: goalId,
+        period: period,
+        limit: limit,
+      );
+      return Right(logs);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    } catch (e) {
+      return Left(ServerFailure('Unexpected error occurred'));
+    }
+  }
 }
