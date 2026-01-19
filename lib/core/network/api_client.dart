@@ -2,9 +2,16 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
+  // For Locally Run Server
   static const String defaultAuthBaseUrl =
       'http://10.121.108.143:3000/api/auth';
   static const String defaultGoalsBaseUrl = 'http://10.121.108.143:3000/api';
+
+  //For Production
+  // static const String defaultAuthBaseUrl =
+  //     'https://habitharborbackend-port.up.railway.app/api/auth';
+  // static const String defaultGoalsBaseUrl =
+  //     'https://habitharborbackend-port.up.railway.app/api';
   static const String authTokenKey = 'auth_token';
 
   late Dio _dio;
