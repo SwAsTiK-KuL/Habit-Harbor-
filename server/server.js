@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -10,12 +12,26 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Configuration
+// Configuration
 const config = {
-  jwtSecret: 'your-super-secret-jwt-key-change-this-in-production',
-  jwtExpire: '7d',
-  bcryptRounds: 12,
-  dbName: 'login_system.db'
+  jwtSecret: process.env.JWT_SECRET || 'fallback-dev-secret-key-never-use-in-production',
+  jwtExpire: process.env.JWT_EXPIRE || '7d',
+  bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS) || 12,
+//  dbName: process.env.DATABASE_PATH || 'login_system.db'
+  dbName: process.env.DATABASE_PATH || 'habit_harbor.db'
 };
+
+// Security warning for development
+// Security validation for production
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.JWT_SECRET) {
+    console.warn('⚠️  WARNING: JWT_SECRET not set, using fallback secret');
+    console.warn('⚠️  Please set JWT_SECRET in Railway dashboard');
+    // Don't exit - let server continue with fallback secret
+  } else {
+    console.log('✅ Production security checks passed');
+  }
+}
 
 //Auto Completion Manager Class
 class AutoCompletionManager {
@@ -82,8 +98,8 @@ class AutoCompletionManager {
       }
     });
 
-    console.log(`✅ Processed ${dateStr}: ${missedCount} goals auto-missed`);
-    return missedCount;
+    console.log(`✅ Processed ${dateStr}: ${completedCount} goals auto-completed`);
+    return completedCount;
   }
 
   processMissedDays() {
@@ -251,6 +267,7 @@ loadFromFile() {
     }
     return user;
   }
+
 
   emailExists(email) {
     return this.data.users.some(user => user.email === email);
@@ -751,6 +768,11 @@ app.post('/api/auth/login',
           message: 'Invalid credentials'
         });
       }
+
+      console.log('🔍 Debug - User found:', !!user);
+      console.log('🔍 Debug - Email match:', user?.email === email);
+      console.log('🔍 Debug - User active:', user?.is_active);
+      console.log('🔍 Debug - Password provided length:', password?.length);
 
       const isValidPassword = await bcrypt.compare(password, user.password_hash);
       if (!isValidPassword) {
