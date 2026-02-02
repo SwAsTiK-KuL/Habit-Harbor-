@@ -3,15 +3,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
   // For Locally Run Server
-  static const String defaultAuthBaseUrl =
-      'http://10.121.108.143:3000/api/auth';
-  static const String defaultGoalsBaseUrl = 'http://10.121.108.143:3000/api';
+  // static const String defaultAuthBaseUrl = 'http://10.0.2.2:3000/api/auth';
+  // static const String defaultGoalsBaseUrl = 'http://10.0.2.2:3000/api';
 
   //For Production
-  // static const String defaultAuthBaseUrl =
-  //     'https://habitharborbackend-port.up.railway.app/api/auth';
-  // static const String defaultGoalsBaseUrl =
-  //     'https://habitharborbackend-port.up.railway.app/api';
+  static const String defaultAuthBaseUrl =
+      'https://habitharborbackenddeploy.vercel.app/api/auth';
+  static const String defaultGoalsBaseUrl =
+      'https://habitharborbackenddeploy.vercel.app/api';
+
   static const String authTokenKey = 'auth_token';
 
   late Dio _dio;
@@ -21,6 +21,7 @@ class ApiClient {
   // ✅ Constructor now accepts custom base URL
   ApiClient({String? customBaseUrl})
     : baseUrl = customBaseUrl ?? defaultAuthBaseUrl {
+    print('🔵 ApiClient created with baseUrl: $baseUrl');
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,

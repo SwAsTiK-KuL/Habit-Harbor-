@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
-
+import 'package:intl/intl.dart';
 import '../../../domain/entities/user.dart';
 
 class UserProfileCard extends StatelessWidget {
   final User user;
 
-  const UserProfileCard({Key? key, required this.user}) : super(key: key);
+  const UserProfileCard({super.key, required this.user});
 
   String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} at ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+    final localDateTime = dateTime.toLocal();
+    final formatter = DateFormat('dd/MM/yyyy \'at\' HH:mm');
+    return formatter.format(localDateTime);
   }
 
   @override

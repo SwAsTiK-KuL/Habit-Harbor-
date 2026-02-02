@@ -38,16 +38,38 @@ Future<void> initializeDependencies() async {
   print('✅ SharedPreferences registered');
 
   // ✅ FIXED: Using your actual IP address from ipconfig
-  final String baseIp = '10.121.108.143'; // Your computer's actual IP
-  final String alternativeIp = '10.0.2.2'; // Fallback to emulator mapping
+  //For Local Storage
+  // final String baseIp = '10.121.108.143'; // Your computer's actual IP
+  // final String alternativeIp = '10.0.2.2'; // Fallback to emulator mapping
+  // print('🔍 Testing server connectivity with IP: $baseIp');
   final int port = 3000;
 
-  print('🔍 Testing server connectivity with IP: $baseIp');
+  final String baseUrl = 'https://habitharborbackenddeploy.vercel.app';
+
+  // final String baseUrl = 'http://10.0.2.2:3000/api/auth/';
+
+  print('🔍 Testing server connectivity with Vercel URL: $baseUrl');
 
   // ✅ Auth API Dio instance with your actual IP
+  //For Local Storage
+  // final authDio = Dio(
+  //   BaseOptions(
+  //     baseUrl: 'http://$baseIp:$port/api/auth',
+  //     connectTimeout: const Duration(seconds: 10),
+  //     receiveTimeout: const Duration(seconds: 10),
+  //     sendTimeout: const Duration(seconds: 10),
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //       'Accept': 'application/json',
+  //     },
+  //     followRedirects: true,
+  //     maxRedirects: 3,
+  //   ),
+  // );
+
   final authDio = Dio(
     BaseOptions(
-      baseUrl: 'http://$baseIp:$port/api/auth',
+      baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       sendTimeout: const Duration(seconds: 10),
@@ -86,12 +108,12 @@ Future<void> initializeDependencies() async {
   );
 
   sl.registerLazySingleton(() => authDio);
-  print('✅ Auth Dio registered with IP: $baseIp');
+  print('✅ Auth Dio registered with IP: $baseUrl');
 
   // ✅ Goals API Dio instance with your actual IP
   final goalsDio = Dio(
     BaseOptions(
-      baseUrl: 'http://$baseIp:$port/api',
+      baseUrl: 'http://$baseUrl:$port/api',
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       sendTimeout: const Duration(seconds: 10),
@@ -144,7 +166,7 @@ Future<void> initializeDependencies() async {
   );
 
   sl.registerLazySingleton(() => goalsDio, instanceName: 'goalsDio');
-  print('✅ Goals Dio registered with IP: $baseIp');
+  print('✅ Goals Dio registered with IP: $baseUrl');
 
   // Core services
   sl.registerLazySingleton<StorageService>(() => StorageService(sl()));
@@ -152,7 +174,7 @@ Future<void> initializeDependencies() async {
 
   // ✅ Test connectivity immediately with your IP
   try {
-    print('🔍 Testing server connection to: http://$baseIp:$port');
+    print('🔍 Testing server connection to: http://$baseUrl:$port');
     final testResponse = await authDio.get(
       '/health',
       options: Options(
@@ -164,19 +186,19 @@ Future<void> initializeDependencies() async {
     print('📋 Server response: ${testResponse.data}');
   } catch (e) {
     print('❌ Server connection failed with your IP: $e');
-    print('🔄 Trying fallback IP: $alternativeIp');
+    // print('🔄 Trying fallback IP: $alternativeIp');
 
     // Try alternative configuration
-    try {
-      authDio.options.baseUrl = 'http://$alternativeIp:$port/api/auth';
-      goalsDio.options.baseUrl = 'http://$alternativeIp:$port/api';
-
-      final retryResponse = await authDio.get('/health');
-      print('✅ Fallback server connection successful!');
-    } catch (e2) {
-      print('❌ Both IP addresses failed: $e2');
-      print('⚠️ Please check if your server is running on port $port');
-    }
+    // try {
+    //   authDio.options.baseUrl = 'http://$alternativeIp:$port/api/auth';
+    //   goalsDio.options.baseUrl = 'http://$alternativeIp:$port/api';
+    //
+    //   final retryResponse = await authDio.get('/health');
+    //   print('✅ Fallback server connection successful!');
+    // } catch (e2) {
+    //   print('❌ Both IP addresses failed: $e2');
+    //   print('⚠️ Please check if your server is running on port $port');
+    // }
   }
 
   // ✅ ApiClient registration
@@ -265,7 +287,7 @@ Future<void> initializeDependencies() async {
   print('✅ GoalBloc registered');
 
   print('🎉 All dependencies initialized successfully!');
-  print('📱 Using IP: $baseIp for server connectivity');
+  print('📱 Using IP: $baseUrl for server connectivity');
 }
 
 // Helper functions remain the same
