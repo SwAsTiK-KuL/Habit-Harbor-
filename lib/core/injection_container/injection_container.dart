@@ -39,14 +39,14 @@ Future<void> initializeDependencies() async {
 
   // ✅ FIXED: Using your actual IP address from ipconfig
   //For Local Storage
-  final String baseIp = '10.121.108.143'; // Your computer's actual IP
+  // final String baseIp = '10.121.108.143'; // Your computer's actual IP
   // final String alternativeIp = '10.0.2.2'; // Fallback to emulator mapping
   // print('🔍 Testing server connectivity with IP: $baseIp');
   final int port = 3000;
 
-  // final String baseUrl = 'https://habitharborbackenddeploy.vercel.app';
+  final String baseUrl = 'https://habitharborbackenddeploy.vercel.app';
 
-  final String baseUrl = 'http://10.0.2.2:3000/api/auth/';
+  // final String baseUrl = 'http://10.0.2.2:3000/api/auth/';
 
   print('🔍 Testing server connectivity with Vercel URL: $baseUrl');
 
