@@ -22,6 +22,8 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
   // Store analytics data from BLoC
   Map<String, dynamic>? _overviewData;
   Map<String, Map<String, dynamic>> _goalAnalytics = {};
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -47,6 +49,8 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
           _selectedPeriod = newPeriod;
           _overviewData = null;
           _goalAnalytics.clear();
+          _isLoading = true;
+          _errorMessage = null;
         });
         _loadAnalyticsData();
       }
@@ -54,6 +58,11 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
   }
 
   void _loadAnalyticsData() {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
     // Load overview analytics using BLoC
     context.read<GoalBloc>().add(
       LoadOverviewAnalytics(period: _selectedPeriod),
@@ -69,24 +78,47 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     }
   }
 
-  // Helper method to convert JSON to Goal using your existing structure
-  Goal _goalFromJson(Map<String, dynamic> json) {
-    return Goal(
-      id: json['id'] as String,
-      userId: json['user_id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String? ?? '',
-      category: json['category'] as String? ?? 'General',
-      color: json['color'] as String? ?? '#4CAF50',
-      icon: json['icon'] as String? ?? 'star',
-      targetFrequency: json['target_frequency'] as String? ?? 'daily',
-      targetCount: json['target_count'] as int? ?? 1,
-      isActive: json['is_active'] as bool? ?? true,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
-      todayStatus: json['todayStatus'] as String?,
-      todayLogId: json['todayLogId'] as String?,
-    );
+  // Helper method to convert JSON to Goal using your existing structure with null safety
+  Goal? _goalFromJson(Map<String, dynamic>? json) {
+    if (json == null) return null;
+
+    try {
+      return Goal(
+        id: json['id']?.toString() ?? '',
+        userId: json['user_id']?.toString() ?? '',
+        title: json['title']?.toString() ?? '',
+        description: json['description']?.toString() ?? '',
+        category: json['category']?.toString() ?? 'General',
+        color: json['color']?.toString() ?? '#4CAF50',
+        icon: json['icon']?.toString() ?? 'star',
+        targetFrequency: json['target_frequency']?.toString() ?? 'daily',
+        targetCount: _safeParseInt(json['target_count']) ?? 1,
+        isActive: json['is_active'] == true,
+        createdAt: _safeParseDateTime(json['created_at']) ?? DateTime.now(),
+        updatedAt: _safeParseDateTime(json['updated_at']) ?? DateTime.now(),
+        todayStatus: json['todayStatus']?.toString(),
+        todayLogId: json['todayLogId']?.toString(),
+      );
+    } catch (e) {
+      print('Error parsing goal from JSON: $e');
+      return null;
+    }
+  }
+
+  // Safe parsing helpers
+  int? _safeParseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  DateTime? _safeParseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+    return null;
   }
 
   @override
@@ -107,39 +139,75 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
           if (state is OverviewAnalyticsLoaded) {
             setState(() {
               _overviewData = state.data;
+              _isLoading = false;
+              _errorMessage = null;
             });
 
             // Extract goals and load their individual analytics
-            final goals =
-                (_overviewData!['goals'] as List<dynamic>)
-                    .map((g) => _goalFromJson(g))
-                    .toList();
-            _loadGoalAnalytics(goals);
+            final goalsData = _overviewData?['goals'] as List<dynamic>?;
+            if (goalsData != null) {
+              final goals =
+                  goalsData
+                      .map((g) => _goalFromJson(g as Map<String, dynamic>?))
+                      .where((goal) => goal != null)
+                      .cast<Goal>()
+                      .toList();
+              _loadGoalAnalytics(goals);
+            }
           } else if (state is GoalAnalyticsLoaded) {
             setState(() {
               _goalAnalytics[state.goalId] = state.data;
             });
           } else if (state is AnalyticsError) {
+            setState(() {
+              _isLoading = false;
+              _errorMessage = state.message;
+            });
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(state.message),
                 backgroundColor: Colors.red,
+                action: SnackBarAction(
+                  label: 'Retry',
+                  textColor: Colors.white,
+                  onPressed: _loadAnalyticsData,
+                ),
               ),
             );
           }
         },
         builder: (context, state) {
-          if (state is AnalyticsLoading && _overviewData == null) {
-            return const Center(child: CircularProgressIndicator());
+          if (_isLoading) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading analytics...'),
+                ],
+              ),
+            );
+          }
+
+          if (_errorMessage != null) {
+            return _buildErrorState();
           }
 
           if (_overviewData == null) {
             return _buildEmptyState();
           }
 
+          final goalsData = _overviewData!['goals'] as List<dynamic>?;
+          if (goalsData == null) {
+            return _buildEmptyState();
+          }
+
           final goals =
-              (_overviewData!['goals'] as List<dynamic>)
-                  .map((g) => _goalFromJson(g))
+              goalsData
+                  .map((g) => _goalFromJson(g as Map<String, dynamic>?))
+                  .where((goal) => goal != null)
+                  .cast<Goal>()
                   .toList();
 
           return Column(
@@ -169,9 +237,52 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     );
   }
 
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 80, color: Colors.red[400]),
+            const SizedBox(height: 16),
+            Text(
+              'Error Loading History',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage ?? 'An unexpected error occurred',
+              style: TextStyle(color: Colors.grey[600]),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadAnalyticsData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try Again'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSummaryStats() {
-    final stats = _overviewData!['stats'] as Map<String, dynamic>;
-    final totalGoals = _overviewData!['totalGoals'] as int;
+    final stats = _overviewData?['stats'] as Map<String, dynamic>?;
+    final totalGoals = _safeParseInt(_overviewData?['totalGoals']) ?? 0;
+
+    if (stats == null) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -195,7 +306,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
         children: [
           Row(
             children: [
-              Icon(Icons.analytics, color: Colors.white, size: 28),
+              const Icon(Icons.analytics, color: Colors.white, size: 28),
               const SizedBox(width: 12),
               Text(
                 '${_getPeriodDisplayName(_selectedPeriod)} Overview',
@@ -216,14 +327,14 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
               Expanded(
                 child: _buildStatItem(
                   'Completed',
-                  '${stats['completed']}',
+                  '${_safeParseInt(stats['completed']) ?? 0}',
                   Icons.check_circle,
                 ),
               ),
               Expanded(
                 child: _buildStatItem(
                   'Success Rate',
-                  '${stats['completionRate']}%',
+                  '${_safeParseInt(stats['completionRate']) ?? 0}%',
                   Icons.trending_up,
                 ),
               ),
@@ -250,6 +361,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
         Text(
           label,
           style: const TextStyle(color: Colors.white70, fontSize: 12),
+          textAlign: TextAlign.center,
         ),
       ],
     );
@@ -274,6 +386,31 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
   }
 
   Widget _buildGoalsList(List<Goal> goals, String period) {
+    if (goals.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.inbox, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No Goals for This Period',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Create some goals to see your progress history',
+              style: TextStyle(color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: () async {
         _loadAnalyticsData();
@@ -343,11 +480,11 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     final stats = analytics['stats'] as Map<String, dynamic>? ?? {};
     final logs = analytics['logs'] as List<dynamic>? ?? [];
 
-    final completed = stats['completed'] ?? 0;
-    final totalDays = stats['totalDays'] ?? 1;
-    final completionRate = stats['completionRate'] ?? 0;
-    final currentStreak = stats['currentStreak'] ?? 0;
-    final longestStreak = stats['longestStreak'] ?? 0;
+    final completed = _safeParseInt(stats['completed']) ?? 0;
+    final totalDays = _safeParseInt(stats['totalDays']) ?? 1;
+    final completionRate = _safeParseInt(stats['completionRate']) ?? 0;
+    final currentStreak = _safeParseInt(stats['currentStreak']) ?? 0;
+    final longestStreak = _safeParseInt(stats['longestStreak']) ?? 0;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -408,7 +545,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
                     Expanded(
                       child: _buildMiniStat(
                         'Missed',
-                        '${stats['missed'] ?? 0}',
+                        '${_safeParseInt(stats['missed']) ?? 0}',
                         Colors.red,
                         Icons.cancel,
                       ),
@@ -462,37 +599,37 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     final statuses = [
       {
         'name': 'Completed',
-        'value': stats['completed'] ?? 0,
+        'value': _safeParseInt(stats['completed']) ?? 0,
         'color': Colors.green,
         'emoji': '✅',
       },
       {
         'name': 'Missed',
-        'value': stats['missed'] ?? 0,
+        'value': _safeParseInt(stats['missed']) ?? 0,
         'color': Colors.red,
         'emoji': '❌',
       },
       {
         'name': 'Holiday',
-        'value': stats['holiday'] ?? 0,
+        'value': _safeParseInt(stats['holiday']) ?? 0,
         'color': Colors.blue,
         'emoji': '🏖️',
       },
       {
         'name': 'Sick',
-        'value': stats['sick'] ?? 0,
+        'value': _safeParseInt(stats['sick']) ?? 0,
         'color': Colors.orange,
         'emoji': '🤒',
       },
       {
         'name': 'Skipped',
-        'value': stats['skipped'] ?? 0,
+        'value': _safeParseInt(stats['skipped']) ?? 0,
         'color': Colors.grey,
         'emoji': '⏭️',
       },
       {
         'name': 'Unlogged',
-        'value': stats['unloggedDays'] ?? 0,
+        'value': _safeParseInt(stats['unloggedDays']) ?? 0,
         'color': Colors.grey[400]!,
         'emoji': '⭕',
       },
@@ -503,7 +640,8 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       runSpacing: 4,
       children:
           statuses.map((status) {
-            if (status['value'] == 0) return const SizedBox.shrink();
+            final value = status['value'] as int;
+            if (value == 0) return const SizedBox.shrink();
 
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -520,7 +658,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    '${status['name']}: ${status['value']}',
+                    '${status['name']}: $value',
                     style: TextStyle(
                       color: status['color'] as Color,
                       fontSize: 11,
@@ -535,10 +673,16 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
   }
 
   Widget _buildRealCalendar(List<dynamic> logs, Color goalColor) {
-    // Convert logs to date-status map
+    // Convert logs to date-status map with null safety
     final Map<String, String> logMap = {};
     for (final log in logs) {
-      logMap[log['date']] = log['status'];
+      if (log is Map<String, dynamic>) {
+        final date = log['date']?.toString();
+        final status = log['status']?.toString();
+        if (date != null && status != null) {
+          logMap[date] = status;
+        }
+      }
     }
 
     final dates = _getDateRangeForPeriod(_selectedPeriod);
@@ -598,7 +742,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       ),
       child: FractionallySizedBox(
         alignment: Alignment.centerLeft,
-        widthFactor: progress,
+        widthFactor: progress.clamp(0.0, 1.0),
         child: Container(
           decoration: BoxDecoration(
             color: color,
@@ -655,6 +799,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
           Text(
             'Start tracking goals to see your progress history',
             style: TextStyle(color: Colors.grey[500]),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

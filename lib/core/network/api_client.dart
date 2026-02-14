@@ -8,9 +8,9 @@ class ApiClient {
 
   //For Production
   static const String defaultAuthBaseUrl =
-      'https://habitharborbackenddeploy.vercel.app/api/auth';
+      'https://habit-harbor-backend-deploy.vercel.app/api/auth';
   static const String defaultGoalsBaseUrl =
-      'https://habitharborbackenddeploy.vercel.app/api';
+      'https://habit-harbor-backend-deploy.vercel.app/api';
 
   static const String authTokenKey = 'auth_token';
 

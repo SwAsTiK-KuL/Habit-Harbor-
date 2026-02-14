@@ -10,7 +10,7 @@ import '../../domain/entities/user.dart';
 class ProfileScreen extends StatelessWidget {
   final User user;
 
-  const ProfileScreen({Key? key, required this.user}) : super(key: key);
+  const ProfileScreen({super.key, required this.user});
 
   void _handleLogout(BuildContext context) {
     showDialog(
@@ -43,16 +43,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _handleRefreshProfile(context),
-          ),
-        ],
-      ),
+      backgroundColor: const Color(0xFFF5F7FB), // soft app background
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
@@ -70,118 +61,119 @@ class ProfileScreen extends StatelessWidget {
 
           return SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Welcome Header
+                  /// 🔹 HABIT HARBOR HEADER
+                  Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.sailing, size: 48, color: Colors.blue[600]),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Habit Harbor',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  /// 🔹 PROFILE HEADER
                   Card(
                     elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                     child: Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 24,
+                      ),
+                      child: Row(
                         children: [
                           CircleAvatar(
-                            radius: 40,
+                            radius: 34,
                             backgroundColor: Colors.blue[100],
                             child: Icon(
                               Icons.person,
-                              size: 40,
+                              size: 34,
                               color: Colors.blue[800],
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Your Profile',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            currentUser.fullName,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleLarge?.copyWith(
-                              color: Colors.blue[700],
-                              fontWeight: FontWeight.w600,
+                          const SizedBox(width: 18),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Your Profile",
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  currentUser.fullName,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleLarge?.copyWith(
+                                    color: Colors.blue[700],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          if (isLoading) ...[
-                            const SizedBox(height: 16),
+                          if (isLoading)
                             const SizedBox(
-                              height: 20,
-                              width: 20,
+                              height: 22,
+                              width: 22,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             ),
-                          ],
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
 
-                  // User Profile Information
+                  const SizedBox(height: 28),
+
+                  /// 🔹 SECTION LABEL
+                  Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 12),
+                    child: Text(
+                      "Profile Details",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ),
+
                   UserProfileCard(user: currentUser),
-                  const SizedBox(height: 24),
 
-                  // Quick Actions
-                  Card(
-                    elevation: 2,
-                    child: Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Quick Actions',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 16),
-                          _QuickActionTile(
-                            icon: Icons.account_circle_outlined,
-                            title: 'Update Profile',
-                            subtitle: 'Manage your account information',
-                            onTap: () => _handleRefreshProfile(context),
-                          ),
-                          const Divider(),
-                          _QuickActionTile(
-                            icon: Icons.security_outlined,
-                            title: 'Security Settings',
-                            subtitle: 'Change password and security options',
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Feature coming soon!'),
-                                ),
-                              );
-                            },
-                          ),
-                          const Divider(),
-                          _QuickActionTile(
-                            icon: Icons.notifications_outlined,
-                            title: 'Notifications',
-                            subtitle: 'Manage your notification preferences',
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Feature coming soon!'),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
+                  const SizedBox(height: 32),
+
+                  /// 🔹 LOGOUT BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    child: CustomButton(
+                      text: 'Logout',
+                      onPressed: () => _handleLogout(context),
+                      backgroundColor: Colors.red,
+                      isLoading: isLoading,
                     ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Logout Button
-                  CustomButton(
-                    text: 'Logout',
-                    onPressed: () => _handleLogout(context),
-                    backgroundColor: Colors.red,
-                    isLoading: isLoading,
                   ),
                 ],
               ),

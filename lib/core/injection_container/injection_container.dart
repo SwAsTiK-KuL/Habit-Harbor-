@@ -44,7 +44,7 @@ Future<void> initializeDependencies() async {
   // print('🔍 Testing server connectivity with IP: $baseIp');
   final int port = 3000;
 
-  final String baseUrl = 'https://habitharborbackenddeploy.vercel.app';
+  final String baseUrl = 'https://habit-harbor-backend-deploy.vercel.app';
 
   // final String baseUrl = 'http://10.0.2.2:3000/api/auth/';
 

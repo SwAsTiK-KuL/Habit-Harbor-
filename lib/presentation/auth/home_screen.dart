@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
+import 'package:habit_harbor/presentation/auth/profile_screen.dart';
 import '../../application/auth/auth_bloc.dart';
 import '../../application/auth/auth_event.dart';
 import '../../application/auth/auth_state.dart';
@@ -40,6 +41,13 @@ class HomeScreen extends StatelessWidget {
         ),
       );
     }
+  }
+
+  void _navigateToProfile(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ProfileScreen(user: user)),
+    );
   }
 
   void _handleLogout(BuildContext context) {
@@ -160,52 +168,27 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildGoalCard(BuildContext context, Goal goal) {
-    Color goalColor = Colors.deepPurple;
+    Color goalColor = Colors.blue;
     try {
       goalColor = Color(int.parse(goal.color.replaceFirst('#', '0xff')));
     } catch (e) {
       // Default color if parsing fails
     }
 
-    String statusEmoji = '⭕';
-    String statusText = 'Pending';
-    Color statusColor = Colors.grey[600]!;
-
-    if (goal.todayStatus != null) {
-      final status = GoalLogStatus.values.firstWhere(
-        (s) => s.name == goal.todayStatus,
-        orElse: () => GoalLogStatus.missed,
-      );
-      statusEmoji = status.emoji;
-      statusText = status.displayName;
-
-      switch (status) {
-        case GoalLogStatus.completed:
-          statusColor = Colors.green;
-          break;
-        case GoalLogStatus.missed:
-          statusColor = Colors.red;
-          break;
-        case GoalLogStatus.holiday:
-          statusColor = Colors.blue;
-          break;
-        case GoalLogStatus.sick:
-          statusColor = Colors.orange;
-          break;
-        case GoalLogStatus.skipped:
-          statusColor = Colors.grey;
-          break;
-      }
-    }
+    // Calculate streak (mock data for now - you can integrate with real streak logic)
+    int currentStreak = _calculateStreak(goal);
+    int totalDays = 7; // Weekly view
+    double progress = currentStreak / totalDays;
 
     return Card(
       elevation: 2,
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: () => _showStatusDialog(context, goal),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(20.0),
           child: Row(
             children: [
               // Goal Icon
@@ -234,51 +217,31 @@ class HomeScreen extends StatelessWidget {
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
+                        color: Colors.black87,
                       ),
                     ),
-                    if (goal.description.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        goal.description,
-                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
                     const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: goalColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        goal.category,
-                        style: TextStyle(
-                          color: goalColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                    Text(
+                      '${goal.category} Streak',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
                     ),
+                    const SizedBox(height: 12),
+                    // Progress Bar
+                    _buildProgressBar(currentStreak, totalDays, goalColor),
                   ],
                 ),
               ),
 
-              // Status
+              // Progress Text
               Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(statusEmoji, style: const TextStyle(fontSize: 24)),
-                  const SizedBox(height: 4),
                   Text(
-                    statusText,
+                    '$currentStreak / $totalDays days',
                     style: TextStyle(
-                      fontSize: 11,
-                      color: statusColor,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -290,14 +253,50 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildProgressBar(int current, int total, Color color) {
+    return Row(
+      children: List.generate(total, (index) {
+        bool isCompleted = index < current;
+        return Expanded(
+          child: Container(
+            margin: EdgeInsets.only(right: index < total - 1 ? 4 : 0),
+            height: 8,
+            decoration: BoxDecoration(
+              color: isCompleted ? color : Colors.grey[300],
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  int _calculateStreak(Goal goal) {
+    // Mock calculation - replace with real streak logic
+    switch (goal.title.toLowerCase()) {
+      case 'morning workout':
+        return 4;
+      case 'read 20 minutes daily':
+        return 2;
+      case 'drink water':
+        return 5;
+      case 'meditate':
+        return 6;
+      case 'no junk food':
+        return 3;
+      default:
+        return 0;
+    }
+  }
+
   IconData _getGoalIcon(String iconName) {
     switch (iconName.toLowerCase()) {
       case 'fitness':
         return Icons.fitness_center;
       case 'book':
-        return Icons.book;
+        return Icons.menu_book;
       case 'water':
-        return Icons.local_drink;
+        return Icons.water_drop;
       case 'meditation':
         return Icons.self_improvement;
       case 'work':
@@ -318,22 +317,7 @@ class HomeScreen extends StatelessWidget {
     return BlocProvider(
       create: (context) => GetIt.instance<GoalBloc>()..add(const LoadGoals()),
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Habit Harbor'),
-          automaticallyImplyLeading: false,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () {
-                context.read<GoalBloc>().add(const LoadGoals());
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: () => _handleLogout(context),
-            ),
-          ],
-        ),
+        backgroundColor: const Color(0xFFF5F7FB),
         body: BlocConsumer<AuthBloc, AuthState>(
           listener: (context, state) {
             if (state is AuthError) {
@@ -381,30 +365,37 @@ class HomeScreen extends StatelessWidget {
                     },
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16.0),
+                      padding: const EdgeInsets.all(20.0),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Welcome Section
-                          _buildWelcomeCard(context),
+                          // Header
+                          _buildHeader(context),
                           const SizedBox(height: 24),
 
-                          // Today's Habits Section
-                          _buildSectionHeader(context, goalState),
-                          const SizedBox(height: 12),
+                          // Welcome Card
+                          _buildWelcomeCard(context),
+                          const SizedBox(height: 32),
 
-                          // Goals List or Loading/Error States
+                          // Your Goals Section
+                          Text(
+                            'Your Goals',
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Goals List
                           _buildGoalsContent(context, goalState),
 
                           const SizedBox(height: 24),
 
                           // Quick Stats Section
                           _buildQuickStats(context, goalState),
-
-                          const SizedBox(height: 16),
-
-                          // Help Text
-                          _buildHelpCard(context),
                         ],
                       ),
                     ),
@@ -414,15 +405,10 @@ class HomeScreen extends StatelessWidget {
             );
           },
         ),
-
-        // In your GoalsScreen or wherever you navigate from, replace your FloatingActionButton with:
         floatingActionButton: FloatingActionButton(
           onPressed: () {
             try {
-              // Try to get the existing GoalBloc
               final goalBloc = context.read<GoalBloc>();
-
-              // Navigate with the existing GoalBloc
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -433,14 +419,9 @@ class HomeScreen extends StatelessWidget {
                       ),
                 ),
               );
-              print('✅ Navigated with existing GoalBloc');
             } catch (e) {
-              print('⚠️ GoalBloc not found in current context: $e');
-
               try {
-                // Create a new GoalBloc instance
                 final goalBloc = GetIt.instance<GoalBloc>();
-
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -451,11 +432,7 @@ class HomeScreen extends StatelessWidget {
                         ),
                   ),
                 );
-                print('✅ Navigated with new GoalBloc instance');
               } catch (createError) {
-                print('❌ Failed to create GoalBloc: $createError');
-
-                // Show error to user
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -467,37 +444,77 @@ class HomeScreen extends StatelessWidget {
               }
             }
           },
-          child: const Icon(Icons.add),
-          tooltip: 'Add New Goal',
+          backgroundColor: Colors.blue[600],
+          child: const Icon(Icons.add, color: Colors.white),
         ),
       ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Row(
+      children: [
+        Icon(Icons.sailing, size: 32, color: Colors.blue[600]),
+        const SizedBox(width: 12),
+        Text(
+          'Habit Harbor',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Colors.blue[700],
+          ),
+        ),
+        const Spacer(),
+        IconButton(
+          onPressed: () => _navigateToProfile(context),
+          icon: Icon(Icons.account_circle, size: 32, color: Colors.blue[600]),
+        ),
+      ],
     );
   }
 
   Widget _buildWelcomeCard(BuildContext context) {
     return Card(
       elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
+        padding: const EdgeInsets.all(20.0),
+        child: Row(
           children: [
-            Icon(Icons.waves, size: 60, color: Colors.deepPurple[600]),
-            const SizedBox(height: 16),
-            Text(
-              'Welcome back, ${user.fullName.split(' ').first}!',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.deepPurple[800],
-              ),
-              textAlign: TextAlign.center,
+            // User Avatar
+            CircleAvatar(
+              radius: 30,
+              backgroundColor: Colors.blue[100],
+              child: Icon(Icons.person, size: 30, color: Colors.blue[700]),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Track your daily habits and build consistency',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
-              textAlign: TextAlign.center,
+            const SizedBox(width: 16),
+
+            // Welcome Text
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Welcome back, ${user.fullName.split(' ').first} 👋',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Here are your current goals',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+
+            // Refresh Button
+            IconButton(
+              onPressed: () {
+                context.read<GoalBloc>().add(const LoadGoals());
+              },
+              icon: Icon(Icons.refresh, color: Colors.green[600], size: 28),
             ),
           ],
         ),
@@ -505,34 +522,11 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, GoalState goalState) {
-    return Row(
-      children: [
-        Icon(Icons.today, color: Colors.deepPurple[600], size: 28),
-        const SizedBox(width: 8),
-        Text(
-          "Today's Habits",
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Colors.deepPurple[800],
-          ),
-        ),
-        const Spacer(),
-        if (goalState is GoalLoading || goalState is GoalActionLoading)
-          const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-      ],
-    );
-  }
-
   Widget _buildGoalsContent(BuildContext context, GoalState goalState) {
     if (goalState is GoalLoading) {
-      return _buildLoadingCard(context);
+      return _buildLoadingState();
     } else if (goalState is GoalError) {
-      return _buildErrorCard(context, goalState.message);
+      return _buildErrorState(context, goalState.message);
     } else if (goalState is GoalsLoaded ||
         goalState is GoalLogged ||
         goalState is GoalLogUpdated ||
@@ -549,7 +543,7 @@ class HomeScreen extends StatelessWidget {
       }
 
       if (goals.isEmpty) {
-        return _buildEmptyStateCard(context);
+        return _buildEmptyState(context);
       }
 
       return Column(
@@ -557,84 +551,55 @@ class HomeScreen extends StatelessWidget {
       );
     }
 
-    return _buildEmptyStateCard(context);
+    return _buildEmptyState(context);
   }
 
-  Widget _buildLoadingCard(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            Text(
-              'Loading your habits...',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
-            ),
-          ],
-        ),
+  Widget _buildLoadingState() {
+    return const Center(child: CircularProgressIndicator());
+  }
+
+  Widget _buildErrorState(BuildContext context, String message) {
+    return Center(
+      child: Column(
+        children: [
+          Icon(Icons.error_outline, size: 48, color: Colors.red[400]),
+          const SizedBox(height: 16),
+          Text(
+            'Failed to load goals',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(color: Colors.red[600]),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            style: TextStyle(color: Colors.grey[600]),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildErrorCard(BuildContext context, String message) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.red[400]),
-            const SizedBox(height: 16),
-            Text(
-              'Failed to load habits',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(color: Colors.red[600]),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message,
-              style: TextStyle(color: Colors.grey[600]),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                context.read<GoalBloc>().add(const LoadGoals());
-              },
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyStateCard(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          children: [
-            Icon(Icons.flag_outlined, size: 48, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'No habits yet',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Create your first habit to start building consistency!',
-              style: TextStyle(color: Colors.grey[500]),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        children: [
+          Icon(Icons.flag_outlined, size: 48, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          Text(
+            'No goals yet',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Create your first goal to start building habits!',
+            style: TextStyle(color: Colors.grey[500]),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
@@ -644,19 +609,27 @@ class HomeScreen extends StatelessWidget {
       children: [
         Expanded(
           child: Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: InkWell(
               onTap: () => _navigateToHistory(context),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(16),
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   children: [
                     Icon(Icons.history, color: Colors.blue[600], size: 32),
                     const SizedBox(height: 8),
                     const Text(
                       'History',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
                     ),
+                    const SizedBox(height: 4),
                     _buildTodayStatsText(goalState),
                   ],
                 ),
@@ -667,16 +640,21 @@ class HomeScreen extends StatelessWidget {
         const SizedBox(width: 16),
         Expanded(
           child: Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(20.0),
               child: Column(
                 children: [
                   Icon(Icons.trending_up, color: Colors.green[600], size: 32),
                   const SizedBox(height: 8),
                   const Text(
                     'Total Habits',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                   ),
+                  const SizedBox(height: 4),
                   _buildTotalStatsText(goalState),
                 ],
               ),
@@ -734,27 +712,6 @@ class HomeScreen extends StatelessWidget {
     return const Text(
       '- active',
       style: TextStyle(color: Colors.grey, fontSize: 12),
-    );
-  }
-
-  Widget _buildHelpCard(BuildContext context) {
-    return Card(
-      color: Colors.blue[50],
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Icon(Icons.info_outline, color: Colors.blue[600]),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Tap any habit to log your progress for today. Use the Goals tab to create and manage habits.',
-                style: TextStyle(color: Colors.blue[800], fontSize: 13),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

@@ -6,83 +6,88 @@ class UserProfileCard extends StatelessWidget {
 
   const UserProfileCard({Key? key, required this.user}) : super(key: key);
 
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} at ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  String _formatDateTime(DateTime dt) {
+    return '${dt.day}/${dt.month}/${dt.year} • ${dt.hour}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
+      elevation: 3,
+      shadowColor: Colors.black.withOpacity(0.08),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          color: const Color(0xFFF8FAFC), // soft background
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            /// 🔹 HEADER WITH AVATAR
             Row(
               children: [
-                Icon(
-                  Icons.account_box_outlined,
-                  color: Colors.blue[600],
-                  size: 24,
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: Colors.blue.shade100,
+                  child: Text(
+                    user.username[0].toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'Profile Information',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                const SizedBox(width: 16),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.username,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      user.email,
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 20),
 
-            _ProfileInfoRow(
+            const SizedBox(height: 24),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+
+            /// 🔹 INFO SECTION
+            _ProfileTile(
               icon: Icons.person_outline,
-              label: 'Username',
-              value: user.username,
+              label: 'First Name',
+              value: user.firstName ?? '-',
             ),
-            const SizedBox(height: 16),
-
-            _ProfileInfoRow(
-              icon: Icons.email_outlined,
-              label: 'Email',
-              value: user.email,
+            _ProfileTile(
+              icon: Icons.person_2_outlined,
+              label: 'Last Name',
+              value: user.lastName ?? '-',
             ),
-            const SizedBox(height: 16),
-
-            if (user.firstName != null) ...[
-              _ProfileInfoRow(
-                icon: Icons.badge_outlined,
-                label: 'First Name',
-                value: user.firstName!,
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            if (user.lastName != null) ...[
-              _ProfileInfoRow(
-                icon: Icons.badge_outlined,
-                label: 'Last Name',
-                value: user.lastName!,
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            _ProfileInfoRow(
+            _ProfileTile(
               icon: Icons.calendar_today_outlined,
               label: 'Member Since',
               value: _formatDateTime(user.createdAt),
             ),
-
-            if (user.lastLogin != null) ...[
-              const SizedBox(height: 16),
-              _ProfileInfoRow(
-                icon: Icons.schedule_outlined,
+            if (user.lastLogin != null)
+              _ProfileTile(
+                icon: Icons.access_time_outlined,
                 label: 'Last Login',
                 value: _formatDateTime(user.lastLogin!),
               ),
-            ],
           ],
         ),
       ),
@@ -90,12 +95,12 @@ class UserProfileCard extends StatelessWidget {
   }
 }
 
-class _ProfileInfoRow extends StatelessWidget {
+class _ProfileTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
 
-  const _ProfileInfoRow({
+  const _ProfileTile({
     required this.icon,
     required this.label,
     required this.value,
@@ -103,30 +108,35 @@ class _ProfileInfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: Colors.grey[600]),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[600],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: Colors.blue.shade600),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          flex: 3,
-          child: Text(
+          Text(
             value,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
