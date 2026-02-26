@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
 import 'package:habit_harbor/presentation/auth/profile_screen.dart';
+import 'package:habit_harbor/presentation/auth/total_habits_screen.dart';
 import '../../application/auth/auth_bloc.dart';
 import '../../application/auth/auth_event.dart';
 import '../../application/auth/auth_state.dart';
@@ -630,19 +631,40 @@ class _HomeScreenState extends State<HomeScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                children: [
-                  Icon(Icons.trending_up, color: Colors.green[600], size: 32),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Total Habits',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            child: InkWell(
+              onTap: () {
+                final goals = _getGoalsFromState(
+                  context.read<GoalBloc>().state,
+                );
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) => BlocProvider.value(
+                          value: context.read<GoalBloc>(),
+                          child: AllHabitsScreen(goals: goals),
+                        ),
                   ),
-                  const SizedBox(height: 4),
-                  _buildTotalStatsText(goalState),
-                ],
+                );
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  children: [
+                    Icon(Icons.trending_up, color: Colors.green[600], size: 32),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Total Habits',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    _buildTotalStatsText(goalState),
+                  ],
+                ),
               ),
             ),
           ),

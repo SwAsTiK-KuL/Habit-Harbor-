@@ -152,25 +152,23 @@ class GoalBloc extends Bloc<GoalEvent, GoalState> {
 
     result.fold(
       (failure) => emit(GoalError(message: _getFailureMessage(failure))),
-      (_) async {
-        // Check if emit is still active before proceeding
-        if (emit.isDone) return;
-
-        // Reload goals to get updated list
-        final goalsResult = await getAllGoalsUseCase();
-
-        // Check again before emitting
-        if (emit.isDone) return;
-
-        goalsResult.fold(
-          (failure) => emit(GoalError(message: _getFailureMessage(failure))),
-          (goals) {
-            _currentGoals = goals;
-            emit(GoalDeleted(goals: goals));
-          },
-        );
-      },
+      (_) => emit(
+        GoalDeleted(
+          goals: _currentGoals.where((g) => g.id != event.goalId).toList(),
+        ),
+      ),
     );
+
+    if (result.isRight()) {
+      final goalsResult = await getAllGoalsUseCase();
+      goalsResult.fold(
+        (failure) => emit(GoalError(message: _getFailureMessage(failure))),
+        (goals) {
+          _currentGoals = goals;
+          emit(GoalsLoaded(goals: goals));
+        },
+      );
+    }
   }
 
   Future<void> _onLogGoalStatus(

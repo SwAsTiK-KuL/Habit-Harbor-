@@ -40,29 +40,30 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Habit Harbor',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          titleTextStyle: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: 20,
-            color: Colors.black87,
+    // ✅ MultiBlocProvider wraps MaterialApp, not inside it
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (context) => GetIt.instance<AuthBloc>()),
+        BlocProvider(create: (context) => GetIt.instance<GoalBloc>()),
+      ],
+      child: MaterialApp(
+        title: 'Habit Harbor',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+          useMaterial3: true,
+          appBarTheme: const AppBarTheme(
+            centerTitle: true,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            titleTextStyle: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 20,
+              color: Colors.black87,
+            ),
           ),
         ),
-      ),
-      home: MultiBlocProvider(
-        providers: [
-          BlocProvider(create: (context) => GetIt.instance<AuthBloc>()),
-          BlocProvider(create: (context) => GetIt.instance<GoalBloc>()),
-        ],
-        child: const AppInitializer(),
+        home: const AppInitializer(),
       ),
     );
   }
