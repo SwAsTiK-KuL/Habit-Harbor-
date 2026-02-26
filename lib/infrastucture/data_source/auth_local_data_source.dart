@@ -7,6 +7,8 @@ import '../models/user_model.dart';
 abstract class AuthLocalDataSource {
   Future<void> cacheToken(String token);
   Future<String?> getCachedToken();
+  Future<void> cacheRefreshToken(String token); // ✅ new
+  Future<String?> getCachedRefreshToken(); // ✅ new
   Future<void> cacheUser(UserModel user);
   Future<UserModel?> getCachedUser();
   Future<void> clearCache();
@@ -16,6 +18,8 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
   final StorageService storageService;
 
   AuthLocalDataSourceImpl(this.storageService);
+
+  // ─── Access Token ────────────────────────────────────────
 
   @override
   Future<void> cacheToken(String token) async {
@@ -35,6 +39,30 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
     }
   }
 
+  // ─── Refresh Token ───────────────────────────────────────
+
+  @override
+  Future<void> cacheRefreshToken(String token) async {
+    try {
+      await storageService.saveRefreshToken(token);
+    } catch (e) {
+      throw CacheException('Failed to cache refresh token: ${e.toString()}');
+    }
+  }
+
+  @override
+  Future<String?> getCachedRefreshToken() async {
+    try {
+      return storageService.getRefreshToken();
+    } catch (e) {
+      throw CacheException(
+        'Failed to get cached refresh token: ${e.toString()}',
+      );
+    }
+  }
+
+  // ─── User ─────────────────────────────────────────────────
+
   @override
   Future<void> cacheUser(UserModel user) async {
     try {
@@ -50,8 +78,7 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
     try {
       final userJson = storageService.getUserData();
       if (userJson != null) {
-        final userMap = jsonDecode(userJson) as Map<String, dynamic>;
-        return UserModel.fromJson(userMap);
+        return UserModel.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
       }
       return null;
     } catch (e) {
@@ -59,10 +86,12 @@ class AuthLocalDataSourceImpl implements AuthLocalDataSource {
     }
   }
 
+  // ─── Clear ───────────────────────────────────────────────
+
   @override
   Future<void> clearCache() async {
     try {
-      await storageService.clearAll();
+      await storageService.clearAll(); // ✅ clears both tokens + user
     } catch (e) {
       throw CacheException('Failed to clear cache: ${e.toString()}');
     }

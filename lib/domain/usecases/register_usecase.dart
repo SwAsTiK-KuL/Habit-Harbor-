@@ -1,7 +1,7 @@
 import 'package:dartz/dartz.dart';
 import '../../core/failures/failures.dart';
 import '../entities/auth_request.dart';
-import '../entities/auth_response.dart';
+import '../entities/auth/auth_response.dart';
 import '../repository/auth_repository.dart';
 
 class RegisterUseCase {

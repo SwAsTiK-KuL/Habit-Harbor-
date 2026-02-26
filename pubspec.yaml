@@ -76,6 +76,13 @@ dev_dependencies:
   json_serializable: ^6.7.1
   build_runner: ^2.4.7
 
+
+  #Firebase Notification
+  firebase_core: ^4.4.0
+  firebase_messaging: ^16.1.1
+  flutter_local_notifications: ^17.2.4
+
+
 flutter:
   uses-material-design: true
 

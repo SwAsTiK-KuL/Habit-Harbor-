@@ -2,7 +2,7 @@ import 'package:dartz/dartz.dart';
 import '../../core/exceptions/exception.dart';
 import '../../core/failures/failures.dart';
 import '../../domain/entities/auth_request.dart';
-import '../../domain/entities/auth_response.dart';
+import '../../domain/entities/auth/auth_response.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repository/auth_repository.dart';
 import '../data_source/auth_local_data_source.dart';
@@ -26,8 +26,8 @@ class AuthRepositoryImpl implements AuthRepository {
         request.password,
       );
 
-      // Cache the token and user data locally
-      await localDataSource.cacheToken(authResponse.token);
+      await localDataSource.cacheToken(authResponse.accessToken);
+      await localDataSource.cacheRefreshToken(authResponse.refreshToken);
       await localDataSource.cacheUser(authResponse.user as UserModel);
 
       return Right(authResponse);
@@ -36,6 +36,7 @@ class AuthRepositoryImpl implements AuthRepository {
     } on CacheException catch (e) {
       return Left(CacheFailure(e.message));
     } catch (e) {
+      print('❌ LOGIN ERROR: $e');
       return Left(ServerFailure('Unexpected error occurred'));
     }
   }
@@ -54,8 +55,8 @@ class AuthRepositoryImpl implements AuthRepository {
         lastName: request.lastName,
       );
 
-      // Cache the token and user data locally
-      await localDataSource.cacheToken(authResponse.token);
+      await localDataSource.cacheToken(authResponse.accessToken);
+      await localDataSource.cacheRefreshToken(authResponse.refreshToken);
       await localDataSource.cacheUser(authResponse.user as UserModel);
 
       return Right(authResponse);
@@ -64,6 +65,7 @@ class AuthRepositoryImpl implements AuthRepository {
     } on CacheException catch (e) {
       return Left(CacheFailure(e.message));
     } catch (e) {
+      print('❌ REGISTER ERROR: $e');
       return Left(ServerFailure('Unexpected error occurred'));
     }
   }
@@ -71,24 +73,47 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<Either<Failure, void>> logout() async {
     try {
-      final token = await localDataSource.getCachedToken();
-
-      if (token != null) {
-        await remoteDataSource.logout(token);
+      final refreshToken = await localDataSource.getCachedRefreshToken();
+      if (refreshToken != null) {
+        await remoteDataSource.logout(refreshToken: refreshToken);
       }
-
       await localDataSource.clearCache();
       return const Right(null);
     } on ServerException catch (e) {
-      // Even if server logout fails, clear local data
       await localDataSource.clearCache();
       return Left(ServerFailure(e.message));
     } on CacheException catch (e) {
       return Left(CacheFailure(e.message));
     } catch (e) {
-      // Ensure local data is cleared even on unexpected errors
       await localDataSource.clearCache();
       return Left(ServerFailure('Unexpected error occurred'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, AuthResponse>> refreshAccessToken() async {
+    try {
+      final refreshToken = await localDataSource.getCachedRefreshToken();
+      if (refreshToken == null) {
+        return const Left(
+          CacheFailure('No refresh token found. Please log in again.'),
+        );
+      }
+
+      final newTokens = await remoteDataSource.refreshToken(refreshToken);
+
+      await localDataSource.cacheToken(newTokens.accessToken);
+      await localDataSource.cacheRefreshToken(newTokens.refreshToken);
+
+      return Right(newTokens);
+    } on ServerException catch (e) {
+      await localDataSource.clearCache();
+      return Left(ServerFailure(e.message));
+    } on CacheException catch (e) {
+      return Left(CacheFailure(e.message));
+    } catch (e) {
+      await localDataSource.clearCache();
+      return Left(ServerFailure('Token refresh failed'));
     }
   }
 
@@ -96,16 +121,11 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, User>> getProfile() async {
     try {
       final token = await localDataSource.getCachedToken();
-
-      if (token == null) {
+      if (token == null)
         return const Left(CacheFailure('No authentication token found'));
-      }
 
       final user = await remoteDataSource.getProfile(token);
-
-      // Update cached user data
       await localDataSource.cacheUser(user);
-
       return Right(user);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
@@ -120,20 +140,13 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<Either<Failure, User>> verifyToken() async {
     try {
       final token = await localDataSource.getCachedToken();
-
-      if (token == null) {
+      if (token == null)
         return const Left(CacheFailure('No authentication token found'));
-      }
 
       final user = await remoteDataSource.verifyToken(token);
-
-      // Update cached user data
       await localDataSource.cacheUser(user);
-
       return Right(user);
     } on ServerException catch (e) {
-      // Token might be expired or invalid, clear local data
-      await localDataSource.clearCache();
       return Left(ServerFailure(e.message));
     } on CacheException catch (e) {
       return Left(CacheFailure(e.message));

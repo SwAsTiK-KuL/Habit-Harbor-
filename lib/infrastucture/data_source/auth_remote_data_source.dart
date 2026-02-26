@@ -13,7 +13,8 @@ abstract class AuthRemoteDataSource {
     String? firstName,
     String? lastName,
   });
-  Future<void> logout(String token);
+  Future<void> logout({required String refreshToken});
+  Future<AuthResponseModel> refreshToken(String refreshToken);
   Future<UserModel> getProfile(String token);
   Future<UserModel> verifyToken(String token);
 }
@@ -29,7 +30,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       '/login',
       data: {'email': email, 'password': password},
     );
-
     if (response['success'] == true) {
       return AuthResponseModel.fromJson(response['data']);
     } else {
@@ -57,7 +57,6 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         if (lastName != null) 'last_name': lastName,
       },
     );
-
     if (response['success'] == true) {
       return AuthResponseModel.fromJson(response['data']);
     } else {
@@ -66,51 +65,79 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   }
 
   @override
-  Future<void> logout(String token) async {
-    // ✅ FIXED: Since your ApiClient doesn't support headers parameter,
-    // we'll need to modify this approach. Your ApiClient should handle
-    // auth headers automatically or we need to set the token beforehand
+  Future<void> logout({required String refreshToken}) async {
     try {
-      final response = await apiClient.post('/logout');
-
+      final response = await apiClient.post(
+        '/logout',
+        data: {'refresh_token': refreshToken},
+      );
       if (response['success'] != true) {
         throw ServerException(response['message'] ?? 'Logout failed');
       }
     } catch (e) {
+      if (e is ServerException) rethrow;
       throw ServerException('Logout failed: $e');
     }
   }
 
   @override
-  Future<UserModel> getProfile(String token) async {
-    // ✅ FIXED: Your ApiClient should handle auth automatically via interceptors
+  Future<AuthResponseModel> refreshToken(String refreshToken) async {
     try {
-      final response = await apiClient.get('/profile');
+      final response = await apiClient.post(
+        '/refresh',
+        data: {'refresh_token': refreshToken},
+      );
 
       if (response['success'] == true) {
-        return UserModel.fromJson(response['data']['user']);
+        final data = response['data'] as Map<String, dynamic>;
+
+        return AuthResponseModel(
+          user: UserModel(
+            id: 'pending',
+            username: '',
+            email: '',
+            createdAt: DateTime.now(),
+          ),
+          accessToken: data['access_token'] as String,
+          refreshToken: data['refresh_token'] as String,
+        );
+      } else {
+        throw ServerException(response['message'] ?? 'Token refresh failed');
+      }
+    } catch (e) {
+      if (e is ServerException) rethrow;
+      throw ServerException('Token refresh failed: $e');
+    }
+  }
+
+  @override
+  Future<UserModel> getProfile(String token) async {
+    try {
+      final response = await apiClient.get('/profile');
+      if (response['success'] == true) {
+        return UserModel.fromJson(response['data'] as Map<String, dynamic>);
       } else {
         throw ServerException(response['message'] ?? 'Failed to get profile');
       }
     } catch (e) {
+      if (e is ServerException) rethrow;
       throw ServerException('Failed to get profile: $e');
     }
   }
 
   @override
   Future<UserModel> verifyToken(String token) async {
-    // ✅ FIXED: Your ApiClient should handle auth automatically via interceptors
     try {
       final response = await apiClient.get('/verify-token');
-
       if (response['success'] == true) {
-        return UserModel.fromJson(response['data']['user']);
+        return UserModel.fromJson(response['data'] as Map<String, dynamic>);
       } else {
         throw ServerException(
           response['message'] ?? 'Token verification failed',
         );
       }
     } catch (e) {
+      if (e is ServerException) rethrow;
       throw ServerException('Token verification failed: $e');
     }
   }

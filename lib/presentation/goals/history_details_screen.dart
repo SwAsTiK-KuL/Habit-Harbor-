@@ -4,11 +4,10 @@ import 'package:intl/intl.dart';
 import '../../application/goal/goal_bloc.dart';
 import '../../application/goal/goal_event.dart';
 import '../../application/goal/goal_state.dart';
-import '../../domain/entities/goals/goals_log.dart';
 import '../../infrastucture/models/goals/goal.dart';
 
 class HistoryDetailsScreen extends StatefulWidget {
-  const HistoryDetailsScreen({Key? key}) : super(key: key);
+  const HistoryDetailsScreen({super.key});
 
   @override
   State<HistoryDetailsScreen> createState() => _HistoryDetailsScreenState();
@@ -520,8 +519,12 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
             _buildProgressBar(completionRate / 100, goalColor),
             const SizedBox(height: 4),
             Text(
-              '$completed/$totalDays days ($completionRate%)',
+              '$completed/$totalDays days tracked ($completionRate%)',
               style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
+            Text(
+              'Goal started ${DateFormat('MMM d, y').format(goal.createdAt)}',
+              style: TextStyle(color: Colors.grey[600], fontSize: 10),
             ),
           ],
         ),
@@ -673,83 +676,224 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
   }
 
   Widget _buildRealCalendar(List<dynamic> logs, Color goalColor) {
-    // Convert logs to date-status map with null safety
     final Map<String, String> logMap = {};
     for (final log in logs) {
       if (log is Map<String, dynamic>) {
         final date = log['date']?.toString();
         final status = log['status']?.toString();
-        if (date != null && status != null) {
-          logMap[date] = status;
-        }
+        if (date != null && status != null) logMap[date] = status;
       }
     }
 
     final dates = _getDateRangeForPeriod(_selectedPeriod);
-    final daysInGrid = dates.length > 31 ? 42 : 35;
+    if (dates.isEmpty) return const SizedBox.shrink();
+
+    // ✅ Group dates by year-month
+    final Map<String, List<DateTime>> monthGroups = {};
+    for (final date in dates) {
+      final key = DateFormat('yyyy-MM').format(date);
+      monthGroups.putIfAbsent(key, () => []).add(date);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...monthGroups.entries.map((entry) {
+          final monthDates = entry.value;
+          final monthLabel = DateFormat('MMMM yyyy').format(monthDates.first);
+          return _buildMonthGrid(monthLabel, monthDates, logMap, goalColor);
+        }),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            _buildLegendItem('Completed', Colors.green),
+            _buildLegendItem('Missed', Colors.red),
+            _buildLegendItem('Holiday', Colors.blue),
+            _buildLegendItem('Sick', Colors.orange),
+            _buildLegendItem('Skipped', Colors.grey),
+            _buildLegendItem('No log', Colors.grey[300]!),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMonthGrid(
+    String monthLabel,
+    List<DateTime> monthDates,
+    Map<String, String> logMap,
+    Color goalColor,
+  ) {
+    final firstDay = monthDates.first;
+    final startPadding = (firstDay.weekday - 1) % 7;
+
+    final List<List<DateTime?>> weeks = [];
+    List<DateTime?> currentWeek = List.filled(
+      startPadding,
+      null,
+      growable: true,
+    );
+
+    for (final date in monthDates) {
+      currentWeek.add(date);
+      if (currentWeek.length == 7) {
+        weeks.add(currentWeek);
+        currentWeek = [];
+      }
+    }
+    if (currentWeek.isNotEmpty) {
+      while (currentWeek.length < 7) currentWeek.add(null);
+      weeks.add(currentWeek);
+    }
+
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
     return Container(
+      margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.grey[50],
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
       ),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 7,
-          childAspectRatio: 1,
-          crossAxisSpacing: 2,
-          mainAxisSpacing: 2,
-        ),
-        itemCount: daysInGrid,
-        itemBuilder: (context, index) {
-          if (index < dates.length) {
-            final date = dates[index];
-            final dateStr = DateFormat('yyyy-MM-dd').format(date);
-            final status = logMap[dateStr];
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Month header ─────────────────────────────
+          Text(
+            monthLabel,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
 
-            return Container(
-              decoration: BoxDecoration(
-                color: _getColorForStatus(status, goalColor),
-                borderRadius: BorderRadius.circular(4),
+          // ── Day headers ──────────────────────────────
+          Row(
+            children:
+                ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                    .map(
+                      (d) => Expanded(
+                        child: Center(
+                          child: Text(
+                            d,
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: Colors.grey[500],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+          ),
+          const SizedBox(height: 4),
+
+          // ── Week rows ────────────────────────────────
+          ...weeks.map(
+            (week) => Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Row(
+                children:
+                    week.map((date) {
+                      if (date == null)
+                        return const Expanded(child: SizedBox(height: 28));
+
+                      final dateStr = DateFormat('yyyy-MM-dd').format(date);
+                      final status = logMap[dateStr];
+                      final isToday = dateStr == todayStr;
+
+                      return Expanded(
+                        child: Container(
+                          height: 28,
+                          margin: const EdgeInsets.symmetric(horizontal: 1),
+                          decoration: BoxDecoration(
+                            color: _getColorForStatus(status, goalColor),
+                            borderRadius: BorderRadius.circular(4),
+                            border:
+                                isToday
+                                    ? Border.all(
+                                      color: Colors.black54,
+                                      width: 1.5,
+                                    )
+                                    : null,
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${date.day}',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w500,
+                                color:
+                                    status != null
+                                        ? Colors.white
+                                        : Colors.grey[500],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
               ),
-              child: Center(
-                child: Text(
-                  '${date.day}',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: status != null ? Colors.white : Colors.grey[600],
-                  ),
-                ),
-              ),
-            );
-          }
-          return const SizedBox.shrink();
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildProgressBar(double progress, Color color) {
-    return Container(
-      height: 6,
-      decoration: BoxDecoration(
-        color: Colors.grey[300],
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: FractionallySizedBox(
-        alignment: Alignment.centerLeft,
-        widthFactor: progress.clamp(0.0, 1.0),
-        child: Container(
+  Widget _buildLegendItem(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(3),
+            borderRadius: BorderRadius.circular(2),
           ),
         ),
-      ),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(fontSize: 9, color: Colors.grey[600])),
+      ],
+    );
+  }
+
+  Widget _buildProgressBar(double progress, Color color) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final totalWidth = constraints.maxWidth;
+        final filledWidth = (totalWidth * progress.clamp(0.0, 1.0));
+
+        return Stack(
+          children: [
+            // ── Background (empty) ─────────────────────
+            Container(
+              height: 6,
+              width: totalWidth,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            // ── Foreground (filled) ────────────────────
+            Container(
+              height: 6,
+              width: filledWidth,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -849,40 +993,38 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
+    // ✅ How many months back each period covers
+    final int monthsBack;
     switch (period) {
       case 'month':
-        final startOfMonth = DateTime(now.year, now.month, 1);
-        final endOfMonth = DateTime(now.year, now.month + 1, 0);
-        return List.generate(
-          endOfMonth.day,
-          (index) => startOfMonth.add(Duration(days: index)),
-        );
+        monthsBack = 1;
+        break;
       case 'quarter':
-        final quarter = ((now.month - 1) ~/ 3) + 1;
-        final startOfQuarter = DateTime(now.year, (quarter - 1) * 3 + 1, 1);
-        final endOfQuarter = DateTime(now.year, quarter * 3 + 1, 0);
-        final daysDiff = endOfQuarter.difference(startOfQuarter).inDays + 1;
-        return List.generate(
-          daysDiff,
-          (index) => startOfQuarter.add(Duration(days: index)),
-        );
+        monthsBack = 3;
+        break;
       case 'halfyear':
-        final startOfHalfYear = DateTime(now.year, now.month - 5, 1);
-        final daysDiff = today.difference(startOfHalfYear).inDays + 1;
-        return List.generate(
-          daysDiff,
-          (index) => startOfHalfYear.add(Duration(days: index)),
-        );
+        monthsBack = 6;
+        break;
       case 'year':
-        final startOfYear = DateTime(now.year, 1, 1);
-        final daysDiff = today.difference(startOfYear).inDays + 1;
-        return List.generate(
-          daysDiff,
-          (index) => startOfYear.add(Duration(days: index)),
-        );
+        monthsBack = 12;
+        break;
       default:
-        return [];
+        monthsBack = 1;
     }
+
+    // ✅ Start = first day of (current month - monthsBack + 1)
+    // e.g. for quarter in Feb 2026 → start = Dec 1 2025
+    final startMonth = now.month - monthsBack + 1;
+    final startYear = now.year + (startMonth <= 0 ? -1 : 0);
+    final adjustedStartMonth = startMonth <= 0 ? startMonth + 12 : startMonth;
+
+    final start = DateTime(startYear, adjustedStartMonth, 1);
+
+    // ✅ End = last day of current month
+    final end = DateTime(now.year, now.month + 1, 0);
+
+    final daysDiff = end.difference(start).inDays + 1;
+    return List.generate(daysDiff, (index) => start.add(Duration(days: index)));
   }
 
   Color _getColorForStatus(String? status, Color goalColor) {

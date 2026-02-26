@@ -8,11 +8,16 @@ import 'application/auth/auth_state.dart';
 import 'application/goal/goal_bloc.dart';
 import 'core/app/app.dart';
 import 'core/injection_container/injection_container.dart';
+import 'core/service/notification/notification_service.dart';
+import 'package:firebase_core/firebase_core.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    await Firebase.initializeApp();
+    await NotificationService().initialize();
+
     // Initialize all dependencies first
     await initializeDependencies();
     print('✅ Dependencies initialized successfully');

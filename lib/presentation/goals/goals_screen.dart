@@ -10,10 +10,22 @@ import '../../infrastucture/models/goals/goal.dart';
 import 'create_goals_screen.dart';
 import 'goals_detail_screen.dart';
 
-class GoalsScreen extends StatelessWidget {
+class GoalsScreen extends StatefulWidget {
   final User user;
-
   const GoalsScreen({Key? key, required this.user}) : super(key: key);
+
+  @override
+  State<GoalsScreen> createState() => _GoalsScreenState();
+}
+
+class _GoalsScreenState extends State<GoalsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<GoalBloc>().add(const LoadGoals());
+    });
+  }
 
   void _navigateToCreateGoal(BuildContext context) {
     Navigator.push(
@@ -41,7 +53,6 @@ class GoalsScreen extends StatelessWidget {
     );
   }
 
-  // ✅ ADDED: Missing status dialog method
   void _showStatusDialog(BuildContext context, Goal goal) {
     showDialog(
       context: context,
@@ -97,7 +108,6 @@ class GoalsScreen extends StatelessWidget {
     );
   }
 
-  // ✅ ADDED: Status option builder
   Widget _buildStatusOption({
     required BuildContext context,
     required BuildContext dialogContext,
@@ -157,7 +167,6 @@ class GoalsScreen extends StatelessWidget {
     );
   }
 
-  // ✅ ADDED: Edit goal method
   void _editGoal(BuildContext context, Goal goal) {
     Navigator.push(
       context,
@@ -198,18 +207,14 @@ class GoalsScreen extends StatelessWidget {
     Color goalColor = Colors.deepPurple;
     try {
       goalColor = Color(int.parse(goal.color.replaceFirst('#', '0xff')));
-    } catch (e) {
-      // Default color if parsing fails
-    }
+    } catch (e) {}
 
-    // ✅ AUTO-COMPLETION LOGIC: Default to completed, allow user to override
-    String statusEmoji = '✅'; // Default to completed emoji
-    String statusText = 'Completed'; // Default to completed text
-    Color statusColor = Colors.green; // Default to green color
-    bool isAutoCompleted = true; // Track if this is auto-completed
+    String statusEmoji = '✅';
+    String statusText = 'Completed';
+    Color statusColor = Colors.green;
+    bool isAutoCompleted = true;
 
     if (goal.todayStatus != null && goal.todayStatus!.isNotEmpty) {
-      // User has explicitly set a status - use their choice
       isAutoCompleted = false;
       try {
         final status = GoalLogStatus.values.firstWhere(
@@ -218,7 +223,6 @@ class GoalsScreen extends StatelessWidget {
         );
         statusEmoji = status.emoji;
         statusText = status.displayName;
-
         switch (status) {
           case GoalLogStatus.completed:
             statusColor = Colors.green;
@@ -238,7 +242,6 @@ class GoalsScreen extends StatelessWidget {
         }
       } catch (e) {
         print('⚠️ Error parsing goal status: $e');
-        // Keep default completed values
       }
     }
 
@@ -255,7 +258,6 @@ class GoalsScreen extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  // Goal Icon
                   Container(
                     width: 48,
                     height: 48,
@@ -270,8 +272,6 @@ class GoalsScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 16),
-
-                  // Goal Info
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,8 +298,6 @@ class GoalsScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-
-                  // Today's Status with tap to change
                   GestureDetector(
                     onTap: () => _showStatusDialog(context, goal),
                     child: Container(
@@ -330,15 +328,12 @@ class GoalsScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  // Menu
                   PopupMenuButton<String>(
                     onSelected: (value) {
-                      if (value == 'delete') {
+                      if (value == 'delete')
                         _deleteGoal(context, goal);
-                      } else if (value == 'edit') {
+                      else if (value == 'edit')
                         _editGoal(context, goal);
-                      }
                     },
                     itemBuilder:
                         (BuildContext context) => [
@@ -370,8 +365,6 @@ class GoalsScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-
-              // Goal Details Row
               Row(
                 children: [
                   Container(
@@ -411,7 +404,6 @@ class GoalsScreen extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  // Auto-completion indicator
                   if (isAutoCompleted)
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -440,80 +432,77 @@ class GoalsScreen extends StatelessWidget {
     );
   }
 
-  // ✅ FIXED: Single frequency formatting method
   String _formatFrequency(String frequency, int count) {
-    if (count == 1) {
-      return frequency.capitalize();
-    }
+    if (count == 1) return frequency.capitalize();
     return '$count times $frequency';
+  }
+
+  int _getCompletedTodayCount(List<Goal> goals) {
+    return goals
+        .where((g) => g.todayStatus == null || g.todayStatus == 'completed')
+        .length;
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => GetIt.instance<GoalBloc>()..add(const LoadGoals()),
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('My Goals'),
-          automaticallyImplyLeading: false,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () {
-                context.read<GoalBloc>().add(const LoadGoals());
-              },
-            ),
-          ],
-        ),
-        body: BlocConsumer<GoalBloc, GoalState>(
-          listener: (context, state) {
-            if (state is GoalError) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(state.message),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            } else if (state is GoalCreated) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Goal created successfully! 🎉'),
-                  backgroundColor: Colors.green,
-                ),
-              );
-            } else if (state is GoalDeleted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Goal deleted successfully'),
-                  backgroundColor: Colors.orange,
-                ),
-              );
-            } else if (state is GoalLogged) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Goal status updated! ✅'),
-                  backgroundColor: Colors.green,
-                  duration: Duration(seconds: 2),
-                ),
-              );
-            }
-          },
-          builder: (context, state) {
-            return SafeArea(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  context.read<GoalBloc>().add(const LoadGoals());
-                },
-                child: _buildContent(context, state),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Goals'),
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => context.read<GoalBloc>().add(const LoadGoals()),
+          ),
+        ],
+      ),
+      body: BlocConsumer<GoalBloc, GoalState>(
+        listener: (context, state) {
+          if (state is GoalError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.red,
               ),
             );
-          },
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => _navigateToCreateGoal(context),
-          icon: const Icon(Icons.add),
-          label: const Text('New Goal'),
-        ),
+          } else if (state is GoalCreated) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Goal created successfully! 🎉'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          } else if (state is GoalDeleted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Goal deleted successfully'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          } else if (state is GoalLogged) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Goal status updated! ✅'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        },
+        builder: (context, state) {
+          return SafeArea(
+            child: RefreshIndicator(
+              onRefresh:
+                  () async => context.read<GoalBloc>().add(const LoadGoals()),
+              child: _buildContent(context, state),
+            ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _navigateToCreateGoal(context),
+        icon: const Icon(Icons.add),
+        label: const Text('New Goal'),
       ),
     );
   }
@@ -549,9 +538,7 @@ class GoalsScreen extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () {
-                context.read<GoalBloc>().add(const LoadGoals());
-              },
+              onPressed: () => context.read<GoalBloc>().add(const LoadGoals()),
               child: const Text('Retry'),
             ),
           ],
@@ -563,17 +550,16 @@ class GoalsScreen extends StatelessWidget {
         state is GoalLogged ||
         state is GoalActionLoading) {
       List<Goal> goals = [];
-      if (state is GoalsLoaded) {
+      if (state is GoalsLoaded)
         goals = state.goals;
-      } else if (state is GoalCreated) {
+      else if (state is GoalCreated)
         goals = state.allGoals;
-      } else if (state is GoalDeleted) {
+      else if (state is GoalDeleted)
         goals = state.goals;
-      } else if (state is GoalLogged) {
+      else if (state is GoalLogged)
         goals = state.allGoals;
-      } else if (state is GoalActionLoading) {
+      else if (state is GoalActionLoading)
         goals = state.goals;
-      }
 
       if (goals.isEmpty) {
         return SingleChildScrollView(
@@ -619,7 +605,6 @@ class GoalsScreen extends StatelessWidget {
 
       return Column(
         children: [
-          // Summary Cards
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
@@ -670,15 +655,12 @@ class GoalsScreen extends StatelessWidget {
               ],
             ),
           ),
-
-          // Goals List
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.only(bottom: 80),
               itemCount: goals.length,
-              itemBuilder: (context, index) {
-                return _buildGoalCard(context, goals[index]);
-              },
+              itemBuilder:
+                  (context, index) => _buildGoalCard(context, goals[index]),
             ),
           ),
         ],
@@ -686,13 +668,5 @@ class GoalsScreen extends StatelessWidget {
     }
 
     return const SizedBox.shrink();
-  }
-
-  // ✅ ADDED: Helper method for counting completed goals
-  int _getCompletedTodayCount(List<Goal> goals) {
-    return goals.where((goal) {
-      // Count auto-completed goals (null status) and explicitly completed goals
-      return goal.todayStatus == null || goal.todayStatus == 'completed';
-    }).length;
   }
 }

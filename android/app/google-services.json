@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "695172064430",
+    "project_id": "habit-harbor4",
+    "storage_bucket": "habit-harbor4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:695172064430:android:ad561be8d6ea62e469f93f",
+        "android_client_info": {
+          "package_name": "com.example.habit_harbor"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYKgMNO4HAmwKCw98NBC2LZ3fqqTflstM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

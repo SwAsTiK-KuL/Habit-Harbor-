@@ -14,10 +14,29 @@ import '../../infrastucture/models/goals/goal.dart';
 import '../goals/create_goals_screen.dart';
 import '../goals/history_details_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final User user;
-
   const HomeScreen({Key? key, required this.user}) : super(key: key);
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final currentState = context.read<GoalBloc>().state;
+
+      if (currentState is! GoalsLoaded &&
+          currentState is! GoalLogged &&
+          currentState is! GoalCreated &&
+          currentState is! GoalActionLoading) {
+        context.read<GoalBloc>().add(const LoadGoals());
+      }
+    });
+  }
 
   void _navigateToHistory(BuildContext context) {
     try {
@@ -46,7 +65,7 @@ class HomeScreen extends StatelessWidget {
   void _navigateToProfile(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => ProfileScreen(user: user)),
+      MaterialPageRoute(builder: (context) => ProfileScreen(user: widget.user)),
     );
   }
 
@@ -171,14 +190,35 @@ class HomeScreen extends StatelessWidget {
     Color goalColor = Colors.blue;
     try {
       goalColor = Color(int.parse(goal.color.replaceFirst('#', '0xff')));
-    } catch (e) {
-      // Default color if parsing fails
+    } catch (e) {}
+
+    int currentStreak = _calculateStreak(goal);
+    int totalDays = 7;
+
+    // ✅ Color based on today's status
+    Color statusColor;
+    switch (goal.todayStatus) {
+      case 'completed':
+        statusColor = Colors.green;
+        break;
+      case 'missed':
+        statusColor = Colors.red;
+        break;
+      case 'holiday':
+        statusColor = Colors.blue;
+        break;
+      case 'sick':
+        statusColor = Colors.orange;
+        break;
+      case 'skipped':
+        statusColor = Colors.grey;
+        break;
+      default:
+        statusColor = Colors.grey[300]!; // unlogged — all empty
     }
 
-    // Calculate streak (mock data for now - you can integrate with real streak logic)
-    int currentStreak = _calculateStreak(goal);
-    int totalDays = 7; // Weekly view
-    double progress = currentStreak / totalDays;
+    // ✅ Only fill a segment if today is logged
+    final int filledSegments = goal.todayStatus != null ? currentStreak : 0;
 
     return Card(
       elevation: 2,
@@ -191,7 +231,6 @@ class HomeScreen extends StatelessWidget {
           padding: const EdgeInsets.all(20.0),
           child: Row(
             children: [
-              // Goal Icon
               Container(
                 width: 48,
                 height: 48,
@@ -206,8 +245,6 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-
-              // Goal Info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,29 +259,28 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${goal.category} Streak',
+                      '${goal.category} · Streak',
                       style: TextStyle(color: Colors.grey[600], fontSize: 13),
                     ),
                     const SizedBox(height: 12),
-                    // Progress Bar
-                    _buildProgressBar(currentStreak, totalDays, goalColor),
+                    _buildProgressBar(filledSegments, totalDays, statusColor),
                   ],
                 ),
               ),
-
-              // Progress Text
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '$currentStreak / $totalDays days',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+              const SizedBox(width: 12),
+              Text(
+                goal.todayStatus == 'completed'
+                    ? '✅'
+                    : goal.todayStatus == 'missed'
+                    ? '❌'
+                    : goal.todayStatus == 'holiday'
+                    ? '🏖️'
+                    : goal.todayStatus == 'sick'
+                    ? '🤒'
+                    : goal.todayStatus == 'skipped'
+                    ? '⏭️'
+                    : '',
+                style: const TextStyle(fontSize: 24),
               ),
             ],
           ),
@@ -256,7 +292,7 @@ class HomeScreen extends StatelessWidget {
   Widget _buildProgressBar(int current, int total, Color color) {
     return Row(
       children: List.generate(total, (index) {
-        bool isCompleted = index < current;
+        final bool isCompleted = index < current;
         return Expanded(
           child: Container(
             margin: EdgeInsets.only(right: index < total - 1 ? 4 : 0),
@@ -272,7 +308,6 @@ class HomeScreen extends StatelessWidget {
   }
 
   int _calculateStreak(Goal goal) {
-    // Mock calculation - replace with real streak logic
     switch (goal.title.toLowerCase()) {
       case 'morning workout':
         return 4;
@@ -314,139 +349,102 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => GetIt.instance<GoalBloc>()..add(const LoadGoals()),
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7FB),
-        body: BlocConsumer<AuthBloc, AuthState>(
-          listener: (context, state) {
-            if (state is AuthError) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(state.message),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          },
-          builder: (context, authState) {
-            return BlocConsumer<GoalBloc, GoalState>(
-              listener: (context, goalState) {
-                if (goalState is GoalError) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(goalState.message),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                } else if (goalState is GoalLogged) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Goal logged successfully! 🎉'),
-                      backgroundColor: Colors.green,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                } else if (goalState is GoalLogUpdated) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Goal updated successfully! ✅'),
-                      backgroundColor: Colors.blue,
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
-              },
-              builder: (context, goalState) {
-                return SafeArea(
-                  child: RefreshIndicator(
-                    onRefresh: () async {
-                      context.read<GoalBloc>().add(const LoadGoals());
-                    },
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Header
-                          _buildHeader(context),
-                          const SizedBox(height: 24),
-
-                          // Welcome Card
-                          _buildWelcomeCard(context),
-                          const SizedBox(height: 32),
-
-                          // Your Goals Section
-                          Text(
-                            'Your Goals',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey[800],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Goals List
-                          _buildGoalsContent(context, goalState),
-
-                          const SizedBox(height: 24),
-
-                          // Quick Stats Section
-                          _buildQuickStats(context, goalState),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
+    return Scaffold(
+      // ✅ No BlocProvider wrapper
+      backgroundColor: const Color(0xFFF5F7FB),
+      body: BlocConsumer<AuthBloc, AuthState>(
+        listener: (context, state) {
+          if (state is AuthError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.red,
+              ),
             );
-          },
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            try {
-              final goalBloc = context.read<GoalBloc>();
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder:
-                      (context) => BlocProvider<GoalBloc>.value(
-                        value: goalBloc,
-                        child: const CreateGoalScreen(),
-                      ),
-                ),
-              );
-            } catch (e) {
-              try {
-                final goalBloc = GetIt.instance<GoalBloc>();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (context) => BlocProvider<GoalBloc>(
-                          create: (_) => goalBloc,
-                          child: const CreateGoalScreen(),
-                        ),
-                  ),
-                );
-              } catch (createError) {
+          }
+        },
+        builder: (context, authState) {
+          return BlocConsumer<GoalBloc, GoalState>(
+            listener: (context, goalState) {
+              if (goalState is GoalError) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(
-                      'Goal creation is not available: $createError',
-                    ),
+                    content: Text(goalState.message),
                     backgroundColor: Colors.red,
                   ),
                 );
+              } else if (goalState is GoalLogged) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Goal logged successfully! 🎉'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              } else if (goalState is GoalLogUpdated) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Goal updated successfully! ✅'),
+                    backgroundColor: Colors.blue,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
               }
-            }
-          },
-          backgroundColor: Colors.blue[600],
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
+            },
+            builder: (context, goalState) {
+              return SafeArea(
+                child: RefreshIndicator(
+                  onRefresh:
+                      () async =>
+                          context.read<GoalBloc>().add(const LoadGoals()),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeader(context),
+                        const SizedBox(height: 24),
+                        _buildWelcomeCard(context),
+                        const SizedBox(height: 32),
+                        Text(
+                          'Your Goals',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildGoalsContent(context, goalState),
+                        const SizedBox(height: 24),
+                        _buildQuickStats(context, goalState),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          final goalBloc = context.read<GoalBloc>();
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder:
+                  (context) => BlocProvider.value(
+                    value: goalBloc,
+                    child: const CreateGoalScreen(),
+                  ),
+            ),
+          );
+        },
+        backgroundColor: Colors.blue[600],
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
@@ -480,21 +478,18 @@ class HomeScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20.0),
         child: Row(
           children: [
-            // User Avatar
             CircleAvatar(
               radius: 30,
               backgroundColor: Colors.blue[100],
               child: Icon(Icons.person, size: 30, color: Colors.blue[700]),
             ),
             const SizedBox(width: 16),
-
-            // Welcome Text
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Welcome back, ${user.fullName.split(' ').first} 👋',
+                    'Welcome back, ${widget.user.fullName.split(' ').first} 👋',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Colors.grey[800],
@@ -508,12 +503,8 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
             ),
-
-            // Refresh Button
             IconButton(
-              onPressed: () {
-                context.read<GoalBloc>().add(const LoadGoals());
-              },
+              onPressed: () => context.read<GoalBloc>().add(const LoadGoals()),
               icon: Icon(Icons.refresh, color: Colors.green[600], size: 28),
             ),
           ],
@@ -523,29 +514,25 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildGoalsContent(BuildContext context, GoalState goalState) {
-    if (goalState is GoalLoading) {
-      return _buildLoadingState();
-    } else if (goalState is GoalError) {
+    if (goalState is GoalLoading) return _buildLoadingState();
+    if (goalState is GoalError)
       return _buildErrorState(context, goalState.message);
-    } else if (goalState is GoalsLoaded ||
+
+    if (goalState is GoalsLoaded ||
         goalState is GoalLogged ||
         goalState is GoalLogUpdated ||
         goalState is GoalActionLoading) {
       List<Goal> goals = [];
-      if (goalState is GoalsLoaded) {
+      if (goalState is GoalsLoaded)
         goals = goalState.goals;
-      } else if (goalState is GoalLogged) {
+      else if (goalState is GoalLogged)
         goals = goalState.allGoals;
-      } else if (goalState is GoalLogUpdated) {
+      else if (goalState is GoalLogUpdated)
         goals = goalState.allGoals;
-      } else if (goalState is GoalActionLoading) {
+      else if (goalState is GoalActionLoading)
         goals = goalState.goals;
-      }
 
-      if (goals.isEmpty) {
-        return _buildEmptyState(context);
-      }
-
+      if (goals.isEmpty) return _buildEmptyState(context);
       return Column(
         children: goals.map((goal) => _buildGoalCard(context, goal)).toList(),
       );
@@ -554,9 +541,8 @@ class HomeScreen extends StatelessWidget {
     return _buildEmptyState(context);
   }
 
-  Widget _buildLoadingState() {
-    return const Center(child: CircularProgressIndicator());
-  }
+  Widget _buildLoadingState() =>
+      const Center(child: CircularProgressIndicator());
 
   Widget _buildErrorState(BuildContext context, String message) {
     return Center(
@@ -665,53 +651,38 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTodayStatsText(GoalState goalState) {
-    if (goalState is GoalsLoaded ||
-        goalState is GoalLogged ||
-        goalState is GoalLogUpdated) {
-      List<Goal> goals = [];
-      if (goalState is GoalsLoaded) {
-        goals = goalState.goals;
-      } else if (goalState is GoalLogged) {
-        goals = goalState.allGoals;
-      } else if (goalState is GoalLogUpdated) {
-        goals = goalState.allGoals;
-      }
+  List<Goal> _getGoalsFromState(GoalState goalState) {
+    if (goalState is GoalsLoaded) return goalState.goals;
+    if (goalState is GoalLogged) return goalState.allGoals;
+    if (goalState is GoalLogUpdated) return goalState.allGoals;
+    return [];
+  }
 
-      final completedToday =
-          goals.where((goal) => goal.todayStatus == 'completed').length;
-      return Text(
-        '$completedToday completed',
-        style: const TextStyle(color: Colors.grey, fontSize: 12),
+  Widget _buildTodayStatsText(GoalState goalState) {
+    final goals = _getGoalsFromState(goalState);
+    if (goals.isEmpty)
+      return const Text(
+        '- completed',
+        style: TextStyle(color: Colors.grey, fontSize: 12),
       );
-    }
-    return const Text(
-      '- habits',
-      style: TextStyle(color: Colors.grey, fontSize: 12),
+    final completedToday =
+        goals.where((g) => g.todayStatus == 'completed').length;
+    return Text(
+      '$completedToday completed',
+      style: const TextStyle(color: Colors.grey, fontSize: 12),
     );
   }
 
   Widget _buildTotalStatsText(GoalState goalState) {
-    if (goalState is GoalsLoaded ||
-        goalState is GoalLogged ||
-        goalState is GoalLogUpdated) {
-      List<Goal> goals = [];
-      if (goalState is GoalsLoaded) {
-        goals = goalState.goals;
-      } else if (goalState is GoalLogged) {
-        goals = goalState.allGoals;
-      } else if (goalState is GoalLogUpdated) {
-        goals = goalState.allGoals;
-      }
-
-      return Text(
-        '${goals.length} active',
-        style: const TextStyle(color: Colors.grey, fontSize: 12),
+    final goals = _getGoalsFromState(goalState);
+    if (goals.isEmpty)
+      return const Text(
+        '- active',
+        style: TextStyle(color: Colors.grey, fontSize: 12),
       );
-    }
-    return const Text(
-      '- active',
-      style: TextStyle(color: Colors.grey, fontSize: 12),
+    return Text(
+      '${goals.length} active',
+      style: const TextStyle(color: Colors.grey, fontSize: 12),
     );
   }
 }

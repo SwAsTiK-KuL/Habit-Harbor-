@@ -1,8 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
+import 'package:habit_harbor/core/service/notification/notification_service.dart';
+import 'package:habit_harbor/domain/repository/notification/notification_repository.dart';
+import 'package:habit_harbor/domain/usecases/register_fcm_token_usecase.dart';
+import 'package:habit_harbor/domain/usecases/remove_fcm_token_usecase.dart';
+import 'package:habit_harbor/infrastucture/data_source/notification/notification_remote_data_source.dart';
+import 'package:habit_harbor/infrastucture/repository/notification/notification_repository_impl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Domain - Auth
 import '../../application/auth/auth_bloc.dart';
 import '../../application/goal/goal_bloc.dart';
 import '../../domain/repository/auth_repository.dart';
@@ -18,7 +23,6 @@ import '../../domain/usecases/logout_usecase.dart';
 import '../../domain/usecases/register_usecase.dart';
 import '../../domain/usecases/verify_token_usecase.dart';
 
-// Core
 import '../../infrastucture/data_source/auth_local_data_source.dart';
 import '../../infrastucture/data_source/auth_remote_data_source.dart';
 import '../../infrastucture/data_source/goals/goal_remote_data_source.dart';
@@ -32,44 +36,25 @@ final GetIt sl = GetIt.instance;
 Future<void> initializeDependencies() async {
   print('🔵 Initializing dependencies...');
 
-  // External dependencies
+  // ─── External ───────────────────────────────────────────
   final sharedPreferences = await SharedPreferences.getInstance();
   sl.registerLazySingleton(() => sharedPreferences);
   print('✅ SharedPreferences registered');
 
-  // ✅ FIXED: Using your actual IP address from ipconfig
-  //For Local Storage
-  // final String baseIp = '10.121.108.143'; // Your computer's actual IP
-  // final String alternativeIp = '10.0.2.2'; // Fallback to emulator mapping
-  // print('🔍 Testing server connectivity with IP: $baseIp');
-  final int port = 3000;
+  // ─── Production URLs ────────────────────────────────────
+  const String baseUrl = 'https://habit-harbor-backend-deploy.vercel.app';
+  // final String baseUrl = 'http://10.235.220.143:3000/api/auth/';
 
-  final String baseUrl = 'https://habit-harbor-backend-deploy.vercel.app';
+  const String authApiUrl = '$baseUrl/api/auth';
+  const String goalsApiUrl =
+      '$baseUrl/api'; // ✅ Fixed: was 'http://$baseUrl:$port/api'
 
-  // final String baseUrl = 'http://10.0.2.2:3000/api/auth/';
+  print('🔍 Using server: $baseUrl');
 
-  print('🔍 Testing server connectivity with Vercel URL: $baseUrl');
-
-  // ✅ Auth API Dio instance with your actual IP
-  //For Local Storage
-  // final authDio = Dio(
-  //   BaseOptions(
-  //     baseUrl: 'http://$baseIp:$port/api/auth',
-  //     connectTimeout: const Duration(seconds: 10),
-  //     receiveTimeout: const Duration(seconds: 10),
-  //     sendTimeout: const Duration(seconds: 10),
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //       'Accept': 'application/json',
-  //     },
-  //     followRedirects: true,
-  //     maxRedirects: 3,
-  //   ),
-  // );
-
+  // ─── Auth Dio ───────────────────────────────────────────
   final authDio = Dio(
     BaseOptions(
-      baseUrl: baseUrl,
+      baseUrl: authApiUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       sendTimeout: const Duration(seconds: 10),
@@ -82,7 +67,6 @@ Future<void> initializeDependencies() async {
     ),
   );
 
-  // Add logging interceptor for auth API
   authDio.interceptors.add(
     LogInterceptor(
       requestBody: true,
@@ -93,27 +77,24 @@ Future<void> initializeDependencies() async {
     ),
   );
 
-  // ✅ Add connection test interceptor
   authDio.interceptors.add(
     InterceptorsWrapper(
       onError: (error, handler) {
-        print('❌ Auth API Connection Error:');
-        print('   Status: ${error.response?.statusCode}');
-        print('   Message: ${error.message}');
-        print('   Type: ${error.type}');
-        print('   URL: ${error.requestOptions.uri}');
+        print(
+          '❌ Auth API Error: ${error.response?.statusCode} ${error.message}',
+        );
         handler.next(error);
       },
     ),
   );
 
   sl.registerLazySingleton(() => authDio);
-  print('✅ Auth Dio registered with IP: $baseUrl');
+  print('✅ Auth Dio registered');
 
-  // ✅ Goals API Dio instance with your actual IP
+  // ─── Goals Dio ──────────────────────────────────────────
   final goalsDio = Dio(
     BaseOptions(
-      baseUrl: 'http://$baseUrl:$port/api',
+      baseUrl: goalsApiUrl, // ✅ Fixed URL
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
       sendTimeout: const Duration(seconds: 10),
@@ -126,29 +107,25 @@ Future<void> initializeDependencies() async {
     ),
   );
 
-  // Add logging interceptor for goals API
   goalsDio.interceptors.add(
     LogInterceptor(
       requestBody: true,
       responseBody: true,
-      requestHeader: true,
-      responseHeader: true,
       logPrint: (obj) => print('🎯 Goals API: $obj'),
     ),
   );
 
-  // ✅ Add auth token interceptor for goals API
   goalsDio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
         try {
           final storageService = sl<StorageService>();
-          final token = await storageService.getToken();
+          final token = await storageService.getToken(); // ✅ reads access_token
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
-            print('🔐 Added auth token to Goals API request');
+            print('🔐 Auth token added to Goals API request');
           } else {
-            print('⚠️ No auth token found for Goals API request');
+            print('⚠️ No auth token for Goals API request');
           }
         } catch (e) {
           print('❌ Error getting token for Goals API: $e');
@@ -159,22 +136,20 @@ Future<void> initializeDependencies() async {
         print(
           '❌ Goals API Error: ${error.response?.statusCode} - ${error.message}',
         );
-        print('❌ Response: ${error.response?.data}');
         handler.next(error);
       },
     ),
   );
 
   sl.registerLazySingleton(() => goalsDio, instanceName: 'goalsDio');
-  print('✅ Goals Dio registered with IP: $baseUrl');
+  print('✅ Goals Dio registered');
 
-  // Core services
+  // ─── Core Services ──────────────────────────────────────
   sl.registerLazySingleton<StorageService>(() => StorageService(sl()));
   print('✅ StorageService registered');
 
-  // ✅ Test connectivity immediately with your IP
+  // ─── Connectivity Test ──────────────────────────────────
   try {
-    print('🔍 Testing server connection to: http://$baseUrl:$port');
     final testResponse = await authDio.get(
       '/health',
       options: Options(
@@ -182,65 +157,41 @@ Future<void> initializeDependencies() async {
         receiveTimeout: const Duration(seconds: 5),
       ),
     );
-    print('✅ Server connection SUCCESSFUL!');
-    print('📋 Server response: ${testResponse.data}');
+    print('✅ Server connection OK: ${testResponse.data}');
   } catch (e) {
-    print('❌ Server connection failed with your IP: $e');
-    // print('🔄 Trying fallback IP: $alternativeIp');
-
-    // Try alternative configuration
-    // try {
-    //   authDio.options.baseUrl = 'http://$alternativeIp:$port/api/auth';
-    //   goalsDio.options.baseUrl = 'http://$alternativeIp:$port/api';
-    //
-    //   final retryResponse = await authDio.get('/health');
-    //   print('✅ Fallback server connection successful!');
-    // } catch (e2) {
-    //   print('❌ Both IP addresses failed: $e2');
-    //   print('⚠️ Please check if your server is running on port $port');
-    // }
+    print('⚠️ Server connectivity check failed: $e');
   }
 
-  // ✅ ApiClient registration
+  // ─── ApiClient Instances ────────────────────────────────
+  sl.registerLazySingleton<ApiClient>(() => ApiClient.forAuth());
   sl.registerLazySingleton<ApiClient>(
-    () => ApiClient.forAuth(), // ✅ Uses /api/auth base URL
-  );
-  print('✅ Auth ApiClient registered');
-
-  sl.registerLazySingleton<ApiClient>(
-    () => ApiClient.forGoals(), // ✅ Uses /api base URL
+    () => ApiClient.forGoals(),
     instanceName: 'goalsApiClient',
   );
-  print('✅ Goals ApiClient registered');
+  print('✅ ApiClient instances registered');
 
-  // Data sources - Auth
+  // ─── Data Sources ───────────────────────────────────────
   sl.registerLazySingleton<AuthRemoteDataSource>(
     () => AuthRemoteDataSourceImpl(sl()),
   );
   sl.registerLazySingleton<AuthLocalDataSource>(
     () => AuthLocalDataSourceImpl(sl()),
   );
-  print('✅ Auth data sources registered');
-
-  // Data sources - Goals
   sl.registerLazySingleton<GoalRemoteDataSource>(
     () => GoalRemoteDataSourceImpl(sl(instanceName: 'goalsApiClient')),
   );
-  print('✅ Goal data source registered');
+  print('✅ Data sources registered');
 
-  // Repository - Auth
+  // ─── Repositories ───────────────────────────────────────
   sl.registerLazySingleton<AuthRepository>(
     () => AuthRepositoryImpl(remoteDataSource: sl(), localDataSource: sl()),
   );
-  print('✅ Auth repository registered');
-
-  // Repository - Goals
   sl.registerLazySingleton<GoalRepository>(
     () => GoalRepositoryImpl(remoteDataSource: sl()),
   );
-  print('✅ Goal repository registered');
+  print('✅ Repositories registered');
 
-  // Use cases - Auth
+  // ─── Use Cases — Auth ───────────────────────────────────
   sl.registerLazySingleton(() => LoginUseCase(sl()));
   sl.registerLazySingleton(() => RegisterUseCase(sl()));
   sl.registerLazySingleton(() => LogoutUseCase(sl()));
@@ -248,7 +199,7 @@ Future<void> initializeDependencies() async {
   sl.registerLazySingleton(() => VerifyTokenUseCase(sl()));
   print('✅ Auth use cases registered');
 
-  // Use cases - Goals
+  // ─── Use Cases — Goals ──────────────────────────────────
   sl.registerLazySingleton(() => GetAllGoalsUseCase(sl()));
   sl.registerLazySingleton(() => CreateGoalUseCase(sl()));
   sl.registerLazySingleton(() => LogGoalUseCase(sl()));
@@ -256,10 +207,21 @@ Future<void> initializeDependencies() async {
   sl.registerLazySingleton(() => GetOverviewAnalyticsUseCase(sl()));
   sl.registerLazySingleton(() => GetGoalAnalyticsUseCase(sl()));
   sl.registerLazySingleton(() => GetGoalLogsForPeriodUseCase(sl()));
-
   print('✅ Goal use cases registered');
 
-  // BLoC - Auth
+  // ─── Notifications ──────────────────────────────────────
+  sl.registerLazySingleton<NotificationService>(() => NotificationService());
+  sl.registerLazySingleton<NotificationRemoteDataSource>(
+    () => NotificationRemoteDataSourceImpl(sl(instanceName: 'goalsApiClient')),
+  );
+  sl.registerLazySingleton<NotificationRepository>(
+    () => NotificationRepositoryImpl(remoteDataSource: sl()),
+  );
+  sl.registerLazySingleton(() => RegisterFcmTokenUseCase(sl()));
+  sl.registerLazySingleton(() => RemoveFcmTokenUseCase(sl()));
+  print('✅ Notification dependencies registered');
+
+  // ─── BLoCs ──────────────────────────────────────────────
   sl.registerFactory(
     () => AuthBloc(
       loginUseCase: sl(),
@@ -267,11 +229,11 @@ Future<void> initializeDependencies() async {
       logoutUseCase: sl(),
       getProfileUseCase: sl(),
       verifyTokenUseCase: sl(),
+      registerFcmTokenUseCase: sl(),
+      removeFcmTokenUseCase: sl(),
     ),
   );
-  print('✅ AuthBloc registered');
 
-  // BLoC - Goals
   sl.registerFactory(
     () => GoalBloc(
       getAllGoalsUseCase: sl(),
@@ -284,54 +246,7 @@ Future<void> initializeDependencies() async {
       getGoalLogsForPeriodUseCase: sl(),
     ),
   );
-  print('✅ GoalBloc registered');
+  print('✅ BLoCs registered');
 
-  print('🎉 All dependencies initialized successfully!');
-  print('📱 Using IP: $baseUrl for server connectivity');
-}
-
-// Helper functions remain the same
-Future<void> updateAuthTokenForAllClients(String token) async {
-  try {
-    final storageService = sl<StorageService>();
-    await storageService.saveToken(token);
-    print('✅ Auth token updated for all API clients');
-  } catch (e) {
-    print('❌ Error updating auth token: $e');
-  }
-}
-
-Future<void> clearAuthTokenForAllClients() async {
-  try {
-    final storageService = sl<StorageService>();
-    await storageService.saveToken('');
-    print('✅ Auth token cleared from all API clients');
-  } catch (e) {
-    print('❌ Error clearing auth token: $e');
-  }
-}
-
-Future<void> testGoalsAPIConnection() async {
-  try {
-    final goalsDio = sl<Dio>(instanceName: 'goalsDio');
-    final response = await goalsDio.get('/health');
-    print('✅ Goals API connection test successful: ${response.data}');
-  } catch (e) {
-    print('❌ Goals API connection test failed: $e');
-  }
-}
-
-Future<bool> checkAuthenticationStatus() async {
-  try {
-    final storageService = sl<StorageService>();
-    final token = await storageService.getToken();
-    final isAuthenticated = token != null && token.isNotEmpty;
-    print(
-      '🔐 Authentication status: ${isAuthenticated ? "Authenticated" : "Not authenticated"}',
-    );
-    return isAuthenticated;
-  } catch (e) {
-    print('❌ Error checking authentication status: $e');
-    return false;
-  }
+  print('🎉 All dependencies initialized!');
 }
