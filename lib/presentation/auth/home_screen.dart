@@ -39,6 +39,77 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  void _showClassicSnackbar(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    Color iconColor = Colors.green,
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        content: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.black.withOpacity(0.07)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Colors.black45,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   void _navigateToHistory(BuildContext context) {
     try {
       final goalBloc = context.read<GoalBloc>();
@@ -54,11 +125,12 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     } catch (e) {
       print('❌ Error navigating to history: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to open history. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
+      _showClassicSnackbar(
+        context,
+        title: 'Unable to Open',
+        subtitle: 'Could not open history. Please try again.',
+        icon: Icons.history_toggle_off_rounded,
+        iconColor: Colors.red,
       );
     }
   }
@@ -105,57 +177,228 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showStatusDialog(BuildContext context, Goal goal) {
-    showDialog(
+    Color goalColor = Colors.blue;
+    try {
+      goalColor = Color(int.parse(goal.color.replaceFirst('#', '0xff')));
+    } catch (e) {}
+
+    showModalBottomSheet(
       context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Text('Update ${goal.title}'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildStatusOption(
-                  context: context,
-                  dialogContext: dialogContext,
-                  goal: goal,
-                  status: GoalLogStatus.completed,
-                  icon: Icons.check_circle,
-                  color: Colors.green,
-                ),
-                _buildStatusOption(
-                  context: context,
-                  dialogContext: dialogContext,
-                  goal: goal,
-                  status: GoalLogStatus.missed,
-                  icon: Icons.cancel,
-                  color: Colors.red,
-                ),
-                _buildStatusOption(
-                  context: context,
-                  dialogContext: dialogContext,
-                  goal: goal,
-                  status: GoalLogStatus.holiday,
-                  icon: Icons.beach_access,
-                  color: Colors.blue,
-                ),
-                _buildStatusOption(
-                  context: context,
-                  dialogContext: dialogContext,
-                  goal: goal,
-                  status: GoalLogStatus.sick,
-                  icon: Icons.sick,
-                  color: Colors.orange,
-                ),
-                _buildStatusOption(
-                  context: context,
-                  dialogContext: dialogContext,
-                  goal: goal,
-                  status: GoalLogStatus.skipped,
-                  icon: Icons.skip_next,
-                  color: Colors.grey,
-                ),
-              ],
-            ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (dialogContext) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF2F2F7),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(
+                  color: Colors.black12,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: goalColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: goalColor.withOpacity(0.3)),
+                    ),
+                    child: Icon(
+                      _getGoalIcon(goal.icon),
+                      color: goalColor,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'How did it go?',
+                          style: TextStyle(
+                            color: Colors.black45,
+                            fontSize: 12,
+                            letterSpacing: 1.2,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          goal.title,
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 28),
+
+              Row(
+                children: [
+                  _buildSheetOption(
+                    dialogContext: dialogContext,
+                    goal: goal,
+                    status: GoalLogStatus.completed,
+                    icon: Icons.check_rounded,
+                    label: 'Done',
+                    color: const Color(0xFF30D158),
+                  ),
+                  const SizedBox(width: 12),
+                  _buildSheetOption(
+                    dialogContext: dialogContext,
+                    goal: goal,
+                    status: GoalLogStatus.missed,
+                    icon: Icons.close_rounded,
+                    label: 'Missed',
+                    color: const Color(0xFFFF453A),
+                  ),
+                  const SizedBox(width: 12),
+                  _buildSheetOption(
+                    dialogContext: dialogContext,
+                    goal: goal,
+                    status: GoalLogStatus.holiday,
+                    icon: Icons.beach_access_rounded,
+                    label: 'Holiday',
+                    color: const Color(0xFF0A84FF),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _buildSheetOption(
+                    dialogContext: dialogContext,
+                    goal: goal,
+                    status: GoalLogStatus.sick,
+                    icon: Icons.healing_rounded,
+                    label: 'Sick',
+                    color: const Color(0xFFFF9F0A),
+                  ),
+                  const SizedBox(width: 12),
+                  _buildSheetOption(
+                    dialogContext: dialogContext,
+                    goal: goal,
+                    status: GoalLogStatus.skipped,
+                    icon: Icons.skip_next_rounded,
+                    label: 'Skipped',
+                    color: const Color(0xFF8E8E93),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(dialogContext),
+                      child: Container(
+                        height: 88,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.black12),
+                        ),
+                        child: const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.arrow_downward_rounded,
+                              color: Colors.black38,
+                              size: 26,
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Cancel',
+                              style: TextStyle(
+                                color: Colors.black38,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ── New tile builder ─────────────────────────────────────────────────────────
+  Widget _buildSheetOption({
+    required BuildContext dialogContext,
+    required Goal goal,
+    required GoalLogStatus status,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          Navigator.pop(dialogContext);
+          // ✅ reuse your existing BLoC dispatch here
+          context.read<GoalBloc>().add(
+            LogGoalStatus(goalId: goal.id, status: status.name),
+          );
+        },
+        child: Container(
+          height: 88,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withOpacity(0.25)),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -193,33 +436,7 @@ class _HomeScreenState extends State<HomeScreen> {
       goalColor = Color(int.parse(goal.color.replaceFirst('#', '0xff')));
     } catch (e) {}
 
-    int currentStreak = _calculateStreak(goal);
-    int totalDays = 7;
-
-    // ✅ Color based on today's status
-    Color statusColor;
-    switch (goal.todayStatus) {
-      case 'completed':
-        statusColor = Colors.green;
-        break;
-      case 'missed':
-        statusColor = Colors.red;
-        break;
-      case 'holiday':
-        statusColor = Colors.blue;
-        break;
-      case 'sick':
-        statusColor = Colors.orange;
-        break;
-      case 'skipped':
-        statusColor = Colors.grey;
-        break;
-      default:
-        statusColor = Colors.grey[300]!; // unlogged — all empty
-    }
-
-    // ✅ Only fill a segment if today is logged
-    final int filledSegments = goal.todayStatus != null ? currentStreak : 0;
+    final List<String?> last7DayStatuses = _getLast7DayStatuses(goal);
 
     return Card(
       elevation: 2,
@@ -260,28 +477,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${goal.category} · Streak',
+                      '${goal.category} · Last 7 Days',
                       style: TextStyle(color: Colors.grey[600], fontSize: 13),
                     ),
                     const SizedBox(height: 12),
-                    _buildProgressBar(filledSegments, totalDays, statusColor),
+                    _buildSegmentedProgressBar(last7DayStatuses),
                   ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                goal.todayStatus == 'completed'
-                    ? '✅'
-                    : goal.todayStatus == 'missed'
-                    ? '❌'
-                    : goal.todayStatus == 'holiday'
-                    ? '🏖️'
-                    : goal.todayStatus == 'sick'
-                    ? '🤒'
-                    : goal.todayStatus == 'skipped'
-                    ? '⏭️'
-                    : '',
-                style: const TextStyle(fontSize: 24),
               ),
             ],
           ),
@@ -290,17 +492,129 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildProgressBar(int current, int total, Color color) {
+  List<String?> _getLast7DayStatuses(Goal goal) {
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    final List<String?> statuses = [];
+
+    for (int i = 0; i < 7; i++) {
+      final date = monday.add(Duration(days: i));
+      final dateStr =
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+      if (date.isAfter(now)) {
+        statuses.add(null);
+      } else if (dateStr == todayStr) {
+        statuses.add(goal.todayStatus ?? goal.recentLogs?[dateStr]);
+      } else {
+        // Past days → use recentLogs from backend
+        statuses.add(goal.recentLogs?[dateStr]);
+      }
+    }
+
+    return statuses;
+  }
+
+  Widget _buildSegmentedProgressBar(List<String?> statuses) {
+    final todayIndex = DateTime.now().weekday - 1;
+    final dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
     return Row(
-      children: List.generate(total, (index) {
-        final bool isCompleted = index < current;
+      children: List.generate(7, (index) {
+        final status = statuses[index];
+        final color = _getStatusColor(status);
+        final isToday = index == todayIndex;
+        final isFuture = index > todayIndex;
+
         return Expanded(
-          child: Container(
-            margin: EdgeInsets.only(right: index < total - 1 ? 4 : 0),
-            height: 8,
-            decoration: BoxDecoration(
-              color: isCompleted ? color : Colors.grey[300],
-              borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: Column(
+              children: [
+                // ── Bar segment ──────────────────────────
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOut,
+                  height: isToday ? 36 : 28,
+                  decoration: BoxDecoration(
+                    color:
+                        isFuture
+                            ? Colors.grey[100]
+                            : status != null
+                            ? color.withOpacity(0.15)
+                            : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color:
+                          isToday
+                              ? color != Colors.grey[300]
+                                  ? color.withOpacity(0.6)
+                                  : Colors.black26
+                              : isFuture
+                              ? Colors.grey[200]!
+                              : status != null
+                              ? color.withOpacity(0.3)
+                              : Colors.grey[200]!,
+                      width: isToday ? 1.5 : 1,
+                    ),
+                    boxShadow:
+                        isToday && status != null
+                            ? [
+                              BoxShadow(
+                                color: color.withOpacity(0.25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ]
+                            : null,
+                  ),
+                  child: Center(
+                    child:
+                        isFuture
+                            ? Icon(
+                              Icons.remove,
+                              size: 10,
+                              color: Colors.grey[300],
+                            )
+                            : status != null
+                            ? Icon(
+                              _getStatusIcon(status),
+                              size: isToday ? 16 : 13,
+                              color: color,
+                            )
+                            : Icon(
+                              Icons.circle_outlined,
+                              size: 10,
+                              color: Colors.grey[350],
+                            ),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                // ── Day label ────────────────────────────
+                Text(
+                  dayLabels[index],
+                  style: TextStyle(
+                    fontSize: 8.5,
+                    fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
+                    color: isToday ? Colors.black87 : Colors.black38,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                // ── Today dot ────────────────────────────
+                const SizedBox(height: 3),
+                Container(
+                  width: isToday ? 4 : 0,
+                  height: isToday ? 4 : 0,
+                  decoration: BoxDecoration(
+                    color: status != null ? color : Colors.black45,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -308,20 +622,38 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  int _calculateStreak(Goal goal) {
-    switch (goal.title.toLowerCase()) {
-      case 'morning workout':
-        return 4;
-      case 'read 20 minutes daily':
-        return 2;
-      case 'drink water':
-        return 5;
-      case 'meditate':
-        return 6;
-      case 'no junk food':
-        return 3;
+  // ── Icon per status ──────────────────────────────────────
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'completed':
+        return Icons.check_rounded;
+      case 'missed':
+        return Icons.close_rounded;
+      case 'holiday':
+        return Icons.beach_access_rounded;
+      case 'sick':
+        return Icons.healing_rounded;
+      case 'skipped':
+        return Icons.skip_next_rounded;
       default:
-        return 0;
+        return Icons.circle_outlined;
+    }
+  }
+
+  Color _getStatusColor(String? status) {
+    switch (status) {
+      case 'completed':
+        return Colors.green;
+      case 'missed':
+        return Colors.red;
+      case 'holiday':
+        return Colors.blue;
+      case 'sick':
+        return Colors.orange;
+      case 'skipped':
+        return Colors.grey;
+      default:
+        return Colors.grey[300]!;
     }
   }
 
@@ -351,16 +683,16 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ✅ No BlocProvider wrapper
       backgroundColor: const Color(0xFFF5F7FB),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.red,
-              ),
+            _showClassicSnackbar(
+              context,
+              title: 'Something went wrong',
+              subtitle: state.message,
+              icon: Icons.error_outline_rounded,
+              iconColor: Colors.red,
             );
           }
         },
@@ -368,27 +700,28 @@ class _HomeScreenState extends State<HomeScreen> {
           return BlocConsumer<GoalBloc, GoalState>(
             listener: (context, goalState) {
               if (goalState is GoalError) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(goalState.message),
-                    backgroundColor: Colors.red,
-                  ),
+                _showClassicSnackbar(
+                  context,
+                  title: 'Something went wrong',
+                  subtitle: goalState.message,
+                  icon: Icons.error_outline_rounded,
+                  iconColor: Colors.red,
                 );
               } else if (goalState is GoalLogged) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Goal logged successfully! 🎉'),
-                    backgroundColor: Colors.green,
-                    duration: Duration(seconds: 2),
-                  ),
+                _showClassicSnackbar(
+                  context,
+                  title: 'Goal Logged!',
+                  subtitle: 'Great job keeping up your habit 🎉',
+                  icon: Icons.check_rounded,
+                  iconColor: Colors.green,
                 );
               } else if (goalState is GoalLogUpdated) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Goal updated successfully! ✅'),
-                    backgroundColor: Colors.blue,
-                    duration: Duration(seconds: 2),
-                  ),
+                _showClassicSnackbar(
+                  context,
+                  title: 'Goal Updated!',
+                  subtitle: 'Your log has been updated ✅',
+                  icon: Icons.edit_rounded,
+                  iconColor: Colors.blue,
                 );
               }
             },
@@ -682,16 +1015,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildTodayStatsText(GoalState goalState) {
     final goals = _getGoalsFromState(goalState);
-    if (goals.isEmpty)
+    if (goals.isEmpty) {
       return const Text(
-        '- completed',
+        'No goals yet',
         style: TextStyle(color: Colors.grey, fontSize: 12),
       );
-    final completedToday =
-        goals.where((g) => g.todayStatus == 'completed').length;
+    }
+
+    final total = goals.length;
+    final logged = goals.where((g) => g.todayStatus != null).length;
+    final pending = total - logged;
+    final hour = DateTime.now().hour;
+
+    final timeHint =
+        hour < 12
+            ? '☀️ Morning'
+            : hour < 18
+            ? '🌤 Afternoon'
+            : '🌙 Tonight';
+
     return Text(
-      '$completedToday completed',
-      style: const TextStyle(color: Colors.grey, fontSize: 12),
+      pending == 0 ? 'All logged! ' : '$timeHint · $pending left',
+      style: TextStyle(
+        color: pending == 0 ? Colors.green : Colors.grey,
+        fontSize: 12,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 

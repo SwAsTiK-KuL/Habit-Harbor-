@@ -30,6 +30,77 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
     );
   }
 
+  void _showClassicSnackbar(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    Color iconColor = Colors.green,
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        content: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.black.withOpacity(0.07)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Colors.black45,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   Color _getColorFromHex(String hexColor) {
     try {
       return Color(int.parse(hexColor.replaceFirst('#', '0xff')));
@@ -236,8 +307,12 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
             onSelected: (value) {
               if (value == 'edit') {
                 // TODO: Navigate to edit goal screen
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Edit feature coming soon!')),
+                _showClassicSnackbar(
+                  context,
+                  title: 'Coming Soon',
+                  subtitle: 'Edit feature will be available soon!',
+                  icon: Icons.construction_rounded,
+                  iconColor: Colors.amber,
                 );
               } else if (value == 'delete') {
                 _showDeleteDialog(context);

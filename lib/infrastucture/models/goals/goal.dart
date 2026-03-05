@@ -15,6 +15,7 @@ class Goal extends Equatable {
   final DateTime updatedAt;
   final String? todayStatus;
   final String? todayLogId;
+  final Map<String, String>? recentLogs;
 
   const Goal({
     required this.id,
@@ -31,6 +32,7 @@ class Goal extends Equatable {
     required this.updatedAt,
     this.todayStatus,
     this.todayLogId,
+    this.recentLogs,
   });
 
   @override
@@ -49,6 +51,7 @@ class Goal extends Equatable {
     updatedAt,
     todayStatus,
     todayLogId,
+    recentLogs,
   ];
 
   Goal copyWith({
@@ -66,6 +69,7 @@ class Goal extends Equatable {
     DateTime? updatedAt,
     String? todayStatus,
     String? todayLogId,
+    Map<String, String>? recentLogs,
   }) {
     return Goal(
       id: id ?? this.id,
@@ -82,6 +86,7 @@ class Goal extends Equatable {
       updatedAt: updatedAt ?? this.updatedAt,
       todayStatus: todayStatus ?? this.todayStatus,
       todayLogId: todayLogId ?? this.todayLogId,
+      recentLogs: recentLogs ?? this.recentLogs,
     );
   }
 }

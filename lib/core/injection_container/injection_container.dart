@@ -42,8 +42,8 @@ Future<void> initializeDependencies() async {
   print('✅ SharedPreferences registered');
 
   // ─── Production URLs ────────────────────────────────────
-  const String baseUrl = 'https://habit-harbor-backend-deploy.vercel.app';
-  // final String baseUrl = 'http://10.235.220.143:3000/api/auth/';
+  // const String baseUrl = 'https://habit-harbor-backend-deploy.vercel.app';
+  const String baseUrl = 'http://10.0.2.2:3000/api/auth/';
 
   const String authApiUrl = '$baseUrl/api/auth';
   const String goalsApiUrl =

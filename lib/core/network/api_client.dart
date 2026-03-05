@@ -4,15 +4,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiClient {
   // ─── Base URLs ────────────────────────────────────────────
 
-  // For Locally Run Server
-  // static const String defaultAuthBaseUrl =
-  //     'http://10.235.220.143:3000/api/auth';
-  // static const String defaultGoalsBaseUrl = 'http://10.235.220.143:3000/api';
+  //For Locally Run Server
+  static const String defaultAuthBaseUrl = 'http://10.0.2.2:3000/api/auth';
+  static const String defaultGoalsBaseUrl = 'http://10.0.2.2:3000/api';
 
-  static const String defaultAuthBaseUrl =
-      'https://habit-harbor-backend-deploy.vercel.app/api/auth';
-  static const String defaultGoalsBaseUrl =
-      'https://habit-harbor-backend-deploy.vercel.app/api';
+  // static const String defaultAuthBaseUrl =
+  //     'https://habit-harbor-backend-deploy.vercel.app/api/auth';
+  // static const String defaultGoalsBaseUrl =
+  //     'https://habit-harbor-backend-deploy.vercel.app/api';
 
   // ✅ Updated key names to match StorageService
   static const String accessTokenKey = 'access_token';

@@ -15,6 +15,7 @@ class GoalModel {
   final DateTime updatedAt;
   final String? todayStatus;
   final String? todayLogId;
+  final Map<String, String>? recentLogs;
 
   const GoalModel({
     required this.id,
@@ -31,6 +32,7 @@ class GoalModel {
     required this.updatedAt,
     this.todayStatus,
     this.todayLogId,
+    this.recentLogs,
   });
 
   factory GoalModel.fromJson(Map<String, dynamic> json) {
@@ -49,8 +51,13 @@ class GoalModel {
       updatedAt: DateTime.parse(json['updated_at'] as String),
       todayStatus: json['todayStatus'] as String?,
       todayLogId: json['todayLogId'] as String?,
+      recentLogs:
+          json['recentLogs'] != null
+              ? Map<String, String>.from(json['recentLogs'] as Map)
+              : null,
     );
   }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -67,6 +74,7 @@ class GoalModel {
       'updated_at': updatedAt.toIso8601String(),
       'today_status': todayStatus,
       'today_log_id': todayLogId,
+      'recentLogs': recentLogs,
     };
   }
 
@@ -87,6 +95,7 @@ class GoalModel {
       updatedAt: updatedAt,
       todayStatus: todayStatus,
       todayLogId: todayLogId,
+      recentLogs: recentLogs,
     );
   }
 
@@ -107,6 +116,7 @@ class GoalModel {
       updatedAt: goal.updatedAt,
       todayStatus: goal.todayStatus,
       todayLogId: goal.todayLogId,
+      recentLogs: goal.recentLogs,
     );
   }
 }

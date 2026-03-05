@@ -285,14 +285,26 @@ class MongoDB {
     const enrichedGoals = await Promise.all(
       goals.map(async (goal) => {
         goal.id = goal._id.toString();
+
         const todayLog = await db.collection('goal_logs').findOne({
           goal_id: goal.id,
           date:    today
         });
+
+        const last7Logs = await db.collection('goal_logs')
+          .find({ goal_id: goal.id })
+          .sort({ date: -1 })
+          .limit(7)
+          .toArray();
+
+        const recentLogs = {};
+        last7Logs.forEach(log => { recentLogs[log.date] = log.status; });
+
         return {
           ...goal,
-          todayStatus: todayLog ? todayLog.status           : null,
-          todayLogId:  todayLog ? todayLog._id.toString()   : null
+          todayStatus: todayLog ? todayLog.status         : null,
+          todayLogId:  todayLog ? todayLog._id.toString() : null,
+          recentLogs,
         };
       })
     );

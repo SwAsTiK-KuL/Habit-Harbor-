@@ -20,6 +20,77 @@ class AllHabitsScreen extends StatelessWidget {
     return null;
   }
 
+  void _showClassicSnackbar(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    Color iconColor = Colors.green,
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        content: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.black.withOpacity(0.07)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.10),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: Colors.black45,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   IconData _getGoalIcon(String iconName) {
     switch (iconName.toLowerCase()) {
       case 'fitness':
@@ -78,19 +149,21 @@ class AllHabitsScreen extends StatelessWidget {
         buildWhen: (previous, current) => current is! GoalLoading,
         listener: (context, state) {
           if (state is GoalDeleted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Habit deleted successfully'),
-                backgroundColor: Colors.orange,
-              ),
+            _showClassicSnackbar(
+              context,
+              title: 'Habit Deleted',
+              subtitle: 'The habit has been removed successfully',
+              icon: Icons.delete_outline_rounded,
+              iconColor: Colors.orange,
             );
             if (state.goals.isEmpty) Navigator.pop(context);
           } else if (state is GoalError) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(state.message),
-                backgroundColor: Colors.red,
-              ),
+            _showClassicSnackbar(
+              context,
+              title: 'Something went wrong',
+              subtitle: state.message,
+              icon: Icons.error_outline_rounded,
+              iconColor: Colors.red,
             );
           }
         },
@@ -124,27 +197,32 @@ class AllHabitsScreen extends StatelessWidget {
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
+                padding: const EdgeInsets.fromLTRB(16, 14, 20, 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    left: BorderSide(color: Colors.green[500]!, width: 4),
+                    bottom: BorderSide(color: Colors.grey[100]!, width: 1),
+                  ),
                 ),
-                color: Colors.green[50],
                 child: Row(
                   children: [
-                    Icon(Icons.trending_up, color: Colors.green[700], size: 20),
+                    Icon(Icons.trending_up, color: Colors.green[600], size: 18),
                     const SizedBox(width: 8),
                     Text(
-                      '${currentGoals.length} active habit${currentGoals.length == 1 ? '' : 's'}',
-                      style: TextStyle(
-                        color: Colors.green[700],
-                        fontWeight: FontWeight.w600,
+                      currentGoals.length == 1
+                          ? '1 habit in progress'
+                          : '${currentGoals.length} habits in progress',
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        letterSpacing: 0.1,
                       ),
                     ),
                   ],
                 ),
               ),
-
-              // ── Habits list ───────────────────────────────
               Expanded(
                 child: ListView.separated(
                   padding: const EdgeInsets.all(16),
