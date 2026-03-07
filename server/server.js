@@ -13,6 +13,7 @@ const db = require('./mongodb');
 const admin = require('firebase-admin');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 
@@ -65,7 +66,9 @@ const getISTDateString = () =>
   new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
 const getISTHours = () =>
-  parseInt(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }), 10);
+  parseInt(new Date().toLocaleString('en-US', {
+    timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false
+  }), 10) % 24;
 
 const getISTMinutes = () =>
   parseInt(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', minute: '2-digit' }), 10);
@@ -132,13 +135,10 @@ class AutoCompletionManager {
   }
 
   async processMissedDays() {
-    const todayIST     = getISTDateString();
     const yesterdayIST = this.getYesterdayIST();
 
     if (this.lastProcessedDate === null) {
-      await this.processDate(yesterdayIST);
-      await this.saveLastProcessedDate(todayIST);
-      return;
+      this.lastProcessedDate = addDaysIST(yesterdayIST, -30);
     }
 
     let currentDate = addDaysIST(this.lastProcessedDate, 1);
@@ -148,25 +148,34 @@ class AutoCompletionManager {
       currentDate = addDaysIST(currentDate, 1);
     }
 
-    await this.saveLastProcessedDate(todayIST);
+    await this.saveLastProcessedDate(yesterdayIST);
   }
 
   async startScheduler() {
     console.log('🕛 Starting auto-completion scheduler...');
-    await this.loadLastProcessedDate(); // ✅ Awaited
+    await this.loadLastProcessedDate();
 
     setInterval(() => {
       if (this.isProcessing) return;
-      const todayIST = getISTDateString();
-      const hoursIST = getISTHours();
 
-      if (this.lastProcessedDate !== todayIST && hoursIST === 0) {
+      const todayIST     = getISTDateString();
+      const yesterdayIST = this.getYesterdayIST();
+      const hoursIST     = getISTHours();
+
+      const isMidnightRun = (hoursIST === 0 && this.lastProcessedDate !== todayIST);
+
+      const isBehind = (this.lastProcessedDate !== null && this.lastProcessedDate < yesterdayIST);
+
+      if (isMidnightRun || isBehind) {
         this.isProcessing = true;
         this.processMissedDays()
           .then(() => { this.isProcessing = false; })
-          .catch((err) => { console.error('❌ Auto-completion error:', err); this.isProcessing = false; });
+          .catch((err) => {
+            console.error('❌ Auto-completion error:', err);
+            this.isProcessing = false;
+          });
       }
-    }, 3600000);
+    }, 3600000); // runs every hour
 
     setTimeout(() => {
       if (!this.isProcessing) {
@@ -332,13 +341,12 @@ const calculateStreaks = (logs) => {
   const todayIST    = getISTDateString();
   let currentStreak = 0;
 
+  const startOffset = (sortedLogs[0]?.date === todayIST) ? 0 : 1;
   for (let i = 0; i < sortedLogs.length; i++) {
-    const expected = addDaysIST(todayIST, -i);
+    const expected = addDaysIST(todayIST, -(i + startOffset));
     if (sortedLogs[i].date === expected && sortedLogs[i].status === 'completed') {
       currentStreak++;
-    } else {
-      break;
-    }
+    } else { break; }
   }
 
   const chronoLogs   = [...sortedLogs].reverse();
@@ -551,6 +559,29 @@ app.post('/api/debug/send-test-notification', authenticateToken, async (req, res
     res.json({ success: true, message: 'Test notification triggered' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+
+app.put('/api/goal-logs/:logId', authenticateToken, async (req, res) => {
+  try {
+    const { logId } = req.params;
+    const { status, notes } = req.body;
+
+    const validStatuses = ['completed', 'missed', 'holiday', 'sick', 'skipped'];
+    if (status && !validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+
+    const db_log = await db.findGoalLogById(logId);
+    if (!db_log || db_log.user_id !== req.user.id) {
+      return res.status(404).json({ success: false, message: 'Log not found' });
+    }
+
+    const updatedLog = await db.updateGoalLog(logId, { status, notes });
+    res.json({ success: true, message: 'Log updated successfully', data: updatedLog });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
@@ -854,14 +885,25 @@ app.get('/api/goals/:goalId/stats', authenticateToken, async (req, res) => {
     const holiday   = logs.filter(l => l.status === 'holiday').length;
     const sick      = logs.filter(l => l.status === 'sick').length;
     const skipped   = logs.filter(l => l.status === 'skipped').length;
-    const totalDays = parseInt(days);
+
+    const goalCreatedDate = dateToISTString(goal.created_at);
+    const windowStart     = addDaysIST(getISTDateString(), -parseInt(days));
+    const effectiveStart  = goalCreatedDate > windowStart ? goalCreatedDate : windowStart;
+    const todayIST        = getISTDateString();
+
+    const [sy, sm, sd] = effectiveStart.split('-').map(Number);
+    const [ey, em, ed] = todayIST.split('-').map(Number);
+    const effectiveDays = Math.floor((Date.UTC(ey, em - 1, ed) - Date.UTC(sy, sm - 1, sd)) / 86400000) + 1;
+
+    const { currentStreak, longestStreak } = calculateStreaks(logs);
 
     res.json({
       success: true,
       data: {
-        total_days: totalDays, completed, missed, holiday, sick, skipped,
-        completion_rate: totalDays > 0 ? Math.round((completed / totalDays) * 100) : 0,
-        current_streak: 0, longest_streak: 0
+        total_days: effectiveDays, completed, missed, holiday, sick, skipped,
+        completion_rate: effectiveDays > 0 ? Math.round((completed / effectiveDays) * 100) : 0,
+        current_streak: currentStreak,
+        longest_streak: longestStreak
       }
     });
   } catch (error) {
@@ -887,7 +929,15 @@ app.post('/api/goals/:goalId/logs', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid status' });
     }
 
-    const logDate = date || getISTDateString(); // ✅ IST
+    const logDate = date || getISTDateString();
+
+    const goalCreatedDate = dateToISTString(goal.created_at);
+    if (logDate < goalCreatedDate) {
+      return res.status(400).json({ success: false, message: 'Cannot log before goal creation date' });
+    }
+    if (logDate > getISTDateString()) {
+      return res.status(400).json({ success: false, message: 'Cannot log future dates' });
+    }
 
     const existingLog = await db.findGoalLog(goalId, logDate);
     if (existingLog) {
@@ -926,7 +976,9 @@ app.get('/api/analytics/overview', authenticateToken, async (req, res) => {
       });
     }
 
-    const { start: startDate, end: endDate } = getDateRangeForPeriod(period);
+    const { start: startDate, end: rawEndDate } = getDateRangeForPeriod(period);
+    const todayIST = getISTDateString();
+    const endDate = rawEndDate > todayIST ? todayIST : rawEndDate;
     let totalCompleted = 0, totalMissed = 0, totalHoliday = 0, totalSick = 0, totalSkipped = 0, totalUnlogged = 0;
 
     for (const goal of goals) {
@@ -980,7 +1032,9 @@ app.get('/api/goals/:goalId/analytics', authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Goal not found' });
     }
 
-    const { start: startDate, end: endDate } = getDateRangeForPeriod(period);
+    const { start: startDate, end: rawEndDate } = getDateRangeForPeriod(period);
+    const todayIST = getISTDateString();
+    const endDate = rawEndDate > todayIST ? todayIST : rawEndDate;
     const goalCreatedDate    = dateToISTString(goal.created_at);
     const effectiveStartDate = goalCreatedDate > startDate ? goalCreatedDate : startDate;
 

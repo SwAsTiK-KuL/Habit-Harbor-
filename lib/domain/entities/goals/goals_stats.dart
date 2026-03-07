@@ -23,6 +23,20 @@ class GoalStats extends Equatable {
     required this.longestStreak,
   });
 
+  factory GoalStats.fromJson(Map<String, dynamic> json) {
+    return GoalStats(
+      totalDays: json['total_days'] ?? 0,
+      completed: json['completed'] ?? 0,
+      missed: json['missed'] ?? 0,
+      holiday: json['holiday'] ?? 0,
+      sick: json['sick'] ?? 0,
+      skipped: json['skipped'] ?? 0,
+      completionRate: json['completion_rate'] ?? 0,
+      currentStreak: json['current_streak'] ?? 0,
+      longestStreak: json['longest_streak'] ?? 0,
+    );
+  }
+
   @override
   List<Object?> get props => [
     totalDays,
@@ -36,12 +50,21 @@ class GoalStats extends Equatable {
     longestStreak,
   ];
 
-  // Computed properties
   int get totalLogged => completed + missed + holiday + sick + skipped;
-  int get missedTotal => missed + skipped;
   int get excusedTotal => holiday + sick;
+  int get uncompletedTotal => missed + skipped;
 
-  // Add copyWith method for consistency
+  double get completionPercentage => completionRate.toDouble();
+
+  bool get isOnStreak => currentStreak > 0;
+
+  String get performanceLevel {
+    if (completionRate >= 90) return 'Excellent';
+    if (completionRate >= 75) return 'Good';
+    if (completionRate >= 50) return 'Average';
+    return 'Needs Improvement';
+  }
+
   GoalStats copyWith({
     int? totalDays,
     int? completed,
@@ -64,20 +87,5 @@ class GoalStats extends Equatable {
       currentStreak: currentStreak ?? this.currentStreak,
       longestStreak: longestStreak ?? this.longestStreak,
     );
-  }
-
-  // Helper methods for analytics
-  double get completionPercentage =>
-      totalDays > 0 ? (completed / totalDays) * 100 : 0;
-  bool get isOnStreak => currentStreak > 0;
-  bool get hasCompletedToday =>
-      completed > 0; // This would need more context in real usage
-
-  // Performance indicators
-  String get performanceLevel {
-    if (completionRate >= 90) return 'Excellent';
-    if (completionRate >= 75) return 'Good';
-    if (completionRate >= 50) return 'Average';
-    return 'Needs Improvement';
   }
 }

@@ -426,6 +426,32 @@ class MongoDB {
     );
   }
 
+  async findGoalLogById(logId) {
+    const db = await this.connect();
+    let query;
+    try {
+      query = { _id: new ObjectId(logId) };
+    } catch {
+      query = { id: logId };
+    }
+    const log = await db.collection('goal_logs').findOne(query);
+    if (log) log.id = log._id.toString();
+    return log;
+  }
+
+  async updateGoalLog(logId, updates) {
+    const db = await this.connect();
+    let query;
+    try {
+      query = { _id: new ObjectId(logId) };
+    } catch {
+      query = { id: logId };
+    }
+    const updateData = { ...updates, updated_at: new Date() };
+    await db.collection('goal_logs').updateOne(query, { $set: updateData });
+    return await this.findGoalLogById(logId);
+  }
+
   // ============================================
   // FCM TOKEN OPERATIONS
   // ============================================
