@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:habit_harbor/domain/entities/goals/goal_reminder.dart';
 import 'package:habit_harbor/infrastucture/models/goals/goal.dart';
 import '../../../core/exceptions/exception.dart';
 import '../../../core/network/api_client.dart';
@@ -50,6 +51,18 @@ abstract class GoalRemoteDataSource {
     required String logId,
     String? status,
     String? notes,
+  });
+
+  Future<GoalLog> editHistoryLog({
+    required String goalId,
+    required String date,
+    required String status,
+    String? notes,
+  });
+
+  Future<Goal> updateGoalReminders({
+    required String goalId,
+    required List<GoalReminder> reminders,
   });
 
   Future<void> deleteGoalLog(String logId);
@@ -419,18 +432,17 @@ class GoalRemoteDataSourceImpl implements GoalRemoteDataSource {
   }
 
   @override
+  @override
   Future<Map<String, dynamic>> getGoalLogsForPeriod({
     required String goalId,
     String period = 'month',
     int limit = 365,
   }) async {
     try {
-      print(
-        '📊 GoalRemoteDataSource: Fetching goal logs for $goalId, period: $period',
-      );
+      print('📊 GoalRemoteDataSource: Fetching goal logs for $goalId');
 
       final response = await apiClient.get(
-        '/goals/$goalId/logs?period=$period&limit=$limit',
+        '/goals/$goalId/logs?limit=$limit', // ← period removed
       );
 
       print(
@@ -438,7 +450,12 @@ class GoalRemoteDataSourceImpl implements GoalRemoteDataSource {
       );
 
       if (response['success'] == true) {
-        return response['data'] as Map<String, dynamic>;
+        final List<dynamic> logs = response['data'] as List<dynamic>;
+        return {
+          // ← wrap List in Map
+          'logs': logs,
+          'total': logs.length,
+        };
       } else {
         throw ServerException(
           response['message'] ?? 'Failed to fetch goal logs',
@@ -449,6 +466,71 @@ class GoalRemoteDataSourceImpl implements GoalRemoteDataSource {
       throw NetworkException('Network error: ${e.message}');
     } catch (e) {
       print('❌ Unexpected error fetching goal logs: $e');
+      throw ServerException('Unexpected error: $e');
+    }
+  }
+
+  @override
+  Future<GoalLog> editHistoryLog({
+    required String goalId,
+    required String date,
+    required String status,
+    String? notes,
+  }) async {
+    try {
+      final Map<String, dynamic> data = {'status': status};
+      if (notes != null) data['notes'] = notes;
+
+      final response = await apiClient.put(
+        '/goals/$goalId/logs/date/$date',
+        data: data,
+      );
+
+      if (response['success'] == true) {
+        return GoalLogModel.fromJson(response['data']).toEntity();
+      } else {
+        throw ServerException(
+          response['message'] ?? 'Failed to edit history log',
+        );
+      }
+    } on DioException catch (e) {
+      throw NetworkException('Network error: ${e.message}');
+    } catch (e) {
+      throw ServerException('Unexpected error: $e');
+    }
+  }
+
+  @override
+  Future<Goal> updateGoalReminders({
+    required String goalId,
+    required List<GoalReminder> reminders,
+  }) async {
+    try {
+      final response = await apiClient.put(
+        '/goals/$goalId/reminders',
+        data: {
+          'reminders':
+              reminders
+                  .map(
+                    (r) => {
+                      'id': r.id,
+                      'time': r.time,
+                      'label': r.label,
+                      'enabled': r.enabled,
+                    },
+                  )
+                  .toList(),
+        },
+      );
+      if (response['success'] == true) {
+        return GoalModel.fromJson(response['data']).toEntity();
+      }
+      throw ServerException(
+        response['message'] ?? 'Failed to update reminders',
+      );
+    } on DioException catch (e) {
+      throw NetworkException('Network error: ${e.message}');
+    } catch (e) {
       throw ServerException('Unexpected error: $e');
     }
   }

@@ -124,7 +124,8 @@ class AutoCompletionManager {
           user_id: goal.user_id,
           status:  'completed',
           date:    dateStr,
-          notes:   'Auto-marked as completed'
+          notes:   'Auto-marked as completed',
+          is_auto_completed: true
         });
         completedCount++;
       }
@@ -201,27 +202,119 @@ autoCompletionManager.startScheduler().catch(console.error);
 class NotificationScheduler {
   constructor(db) {
     this.db = db;
-    this.lastNotifiedDate = null;
+    this.lastNotifiedDate  = null;
+    this.sentPerGoalReminders = new Map();
   }
 
   start() {
-    console.log('🔔 Notification scheduler started (fires at 22:00 IST)');
+    console.log('🔔 Notification scheduler started (global: 22:00 IST + per-goal reminders)');
 
     setInterval(async () => {
       try {
         const todayIST   = getISTDateString();
         const hoursIST   = getISTHours();
         const minutesIST = getISTMinutes();
+        const timeStr    = `${String(hoursIST).padStart(2, '0')}:${String(minutesIST).padStart(2, '0')}`;
 
+        // ── Global 10 PM reminder (existing) ────────────
         if (hoursIST === 22 && minutesIST === 0 && this.lastNotifiedDate !== todayIST) {
           this.lastNotifiedDate = todayIST;
-          console.log('🔔 10 PM IST — sending goal reminder notifications...');
+          console.log('🔔 10 PM IST — sending global goal reminder notifications...');
           await this.sendReminderNotifications();
         }
+
+        // ── Per-goal reminders ───────────────────────────
+        await this.sendPerGoalReminders(timeStr, todayIST);
+
+        // ── Midnight: clear the sent-tracker ────────────
+        if (hoursIST === 0 && minutesIST === 0) {
+          this.sentPerGoalReminders.clear();
+          console.log('🧹 Per-goal reminder tracker cleared for new day');
+        }
+
       } catch (err) {
         console.error('❌ Notification scheduler error:', err);
       }
     }, 60 * 1000);
+  }
+
+  async sendPerGoalReminders(timeStr, todayIST) {
+    if (!admin.apps.length) return;
+
+    // Fetch all goals that have an enabled reminder at exactly this HH:MM
+    const goals = await this.db.getGoalsWithReminderDue(timeStr);
+    if (goals.length === 0) return;
+
+    console.log(`🔔 ${timeStr} IST — ${goals.length} per-goal reminder(s) due`);
+    const staleTokens = [];
+
+    for (const goal of goals) {
+      const dedupKey = `${goal.id}_${timeStr}_${todayIST}`;
+
+      // Already sent this reminder today — skip
+      if (this.sentPerGoalReminders.get(dedupKey)) continue;
+
+      // Skip if goal already logged today (user already done)
+      const alreadyLogged = await this.db.findGoalLog(goal.id, todayIST);
+      if (alreadyLogged) {
+        console.log(`⏭️  Skipping reminder for "${goal.title}" — already logged today`);
+        continue;
+      }
+
+      const tokens = goal.fcmTokens;
+      if (tokens.length === 0) continue;
+
+      // Build the notification
+      const reminder = goal.reminders.find(r => r.time === timeStr && r.enabled);
+      const label    = reminder?.label || goal.title;
+
+      const message = {
+        notification: {
+          title: `⏰ ${goal.title}`,
+          body:  `Time to log: ${label}`,
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            channelId:   'goal_reminders',
+            sound:       'default',
+            clickAction: 'FLUTTER_NOTIFICATION_CLICK'
+          },
+        },
+        data: {
+          type:   'goal_reminder',
+          goalId: goal.id,
+          screen: 'home'
+        },
+        tokens,
+      };
+
+      try {
+        const response = await admin.messaging().sendEachForMulticast(message);
+        console.log(`✅ Reminder for "${goal.title}": sent=${response.successCount} failed=${response.failureCount}`);
+
+        // Mark as sent
+        this.sentPerGoalReminders.set(dedupKey, true);
+
+        // Collect stale tokens
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            const code = resp.error?.code;
+            if (code === 'messaging/invalid-registration-token' ||
+                code === 'messaging/registration-token-not-registered') {
+              staleTokens.push(tokens[idx]);
+            }
+          }
+        });
+      } catch (err) {
+        console.error(`❌ Failed to send reminder for "${goal.title}":`, err);
+      }
+    }
+
+    if (staleTokens.length > 0) {
+      console.log(`🧹 Removing ${staleTokens.length} stale FCM token(s)...`);
+      for (const token of staleTokens) await this.db.deleteFCMToken(token);
+    }
   }
 
   async sendReminderNotifications() {
@@ -586,6 +679,82 @@ app.put('/api/goal-logs/:logId', authenticateToken, async (req, res) => {
 });
 
 
+app.put('/api/goals/:goalId/logs/date/:date', authenticateToken, async (req, res) => {
+  try {
+    const { goalId, date } = req.params;
+    const { status, notes } = req.body;
+
+    // 1. Validate status
+    const validStatuses = ['completed', 'missed', 'holiday', 'sick', 'skipped'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Valid status is required' });
+    }
+
+    // 2. Validate date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ success: false, message: 'Date must be in YYYY-MM-DD format' });
+    }
+
+    // 3. Validate goal ownership
+    const goal = await db.findGoalById(goalId);
+    if (!goal || goal.user_id !== req.user.id) {
+      return res.status(404).json({ success: false, message: 'Goal not found' });
+    }
+
+    // 4. Date bounds: must be >= goal creation, must not be future
+    const goalCreatedDate = dateToISTString(goal.created_at);
+    if (date < goalCreatedDate) {
+      return res.status(400).json({ success: false, message: 'Cannot log before goal creation date' });
+    }
+    if (date > getISTDateString()) {
+      return res.status(400).json({ success: false, message: 'Cannot log future dates' });
+    }
+
+    // 5. Upsert: update if exists, create if not
+    const existingLog = await db.findGoalLog(goalId, date);
+
+    let resultLog;
+    if (existingLog) {
+      // Update existing log (covers auto-completed days too)
+      resultLog = await db.updateGoalLog(existingLog.id, { status, notes: notes ?? existingLog.notes, is_manual_edit: true  });
+      return res.json({ success: true, message: 'Log updated successfully', data: resultLog });
+    } else {
+      // Create new log for this past date
+      resultLog = await db.createGoalLog({
+        goal_id: goalId,
+        user_id: req.user.id,
+        status,
+        date,
+        notes: notes || '',
+      });
+      return res.status(201).json({ success: true, message: 'Log created successfully', data: resultLog });
+    }
+
+  } catch (error) {
+    console.error('Upsert log by date error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+app.get('/api/goals/:goalId/logs', authenticateToken, async (req, res) => {
+  try {
+    const { goalId } = req.params;
+    const { limit = 90 } = req.query;
+
+    const goal = await db.findGoalById(goalId);
+    if (!goal || goal.user_id !== req.user.id) {
+      return res.status(404).json({ success: false, message: 'Goal not found' });
+    }
+
+    const logs = await db.getGoalLogsByGoalId(goalId, parseInt(limit));
+    res.json({ success: true, data: logs });
+  } catch (error) {
+    console.error('Get goal logs error:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+
 // ============================================
 // UTILITY
 // ============================================
@@ -809,22 +978,90 @@ app.get('/api/goals', authenticateToken, async (req, res) => {
 
 app.post('/api/goals', authenticateToken, async (req, res) => {
   try {
-    const { title, description, category, color, icon, target_frequency, target_count } = req.body;
+    const { title, description, category, color, icon, target_frequency, target_count, reminders } = req.body;
     if (!title) return res.status(400).json({ success: false, message: 'Goal title is required' });
 
-    const newGoal = await db.createGoal({
-      user_id: req.user.id, title,
-      description: description || '', category: category || 'General',
-      color: color || '#4CAF50', icon: icon || 'star',
-      target_frequency: target_frequency || 'daily', target_count: target_count || 1
+    if (reminders !== undefined) {
+      if (!Array.isArray(reminders)) {
+        return res.status(400).json({ success: false, message: 'reminders must be an array' });
+      }
+      for (const r of reminders) {
+        if (!r.id || !r.time || typeof r.enabled !== 'boolean') {
+          return res.status(400).json({ success: false, message: 'Each reminder must have id, time (HH:MM), and enabled (boolean)' });
+        }
+        if (!/^\d{2}:\d{2}$/.test(r.time)) {
+          return res.status(400).json({ success: false, message: `Invalid time format: ${r.time}. Use HH:MM` });
+        }
+      }
+    }
+
+        const newGoal = await db.createGoal({
+          user_id: req.user.id, title,
+          description: description || '', category: category || 'General',
+          color: color || '#4CAF50', icon: icon || 'star',
+          target_frequency: target_frequency || 'daily', target_count: target_count || 1,
+          reminders: reminders || []
+        });
+
+        res.status(201).json({ success: true, message: 'Goal created successfully', data: newGoal });
+      } catch (error) {
+        console.error('Create goal error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
     });
 
-    res.status(201).json({ success: true, message: 'Goal created successfully', data: newGoal });
-  } catch (error) {
-    console.error('Create goal error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-});
+
+
+    // ============================================
+    // PER-GOAL REMINDERS
+    // PUT /api/goals/:goalId/reminders
+    // Body: { reminders: [{ id, time, label, enabled }] }
+    // Replaces the full reminders array for this goal.
+    // ============================================
+    app.put('/api/goals/:goalId/reminders', authenticateToken, async (req, res) => {
+      try {
+        const { goalId } = req.params;
+        const { reminders } = req.body;
+
+        if (!Array.isArray(reminders)) {
+          return res.status(400).json({ success: false, message: 'reminders must be an array' });
+        }
+
+        // Validate each reminder entry
+        for (const r of reminders) {
+          if (!r.id || !r.time || typeof r.enabled !== 'boolean') {
+            return res.status(400).json({
+              success: false,
+              message: 'Each reminder needs: id (string), time (HH:MM), enabled (boolean)'
+            });
+          }
+          if (!/^\d{2}:\d{2}$/.test(r.time)) {
+            return res.status(400).json({ success: false, message: `Invalid time: ${r.time}. Use HH:MM 24h format` });
+          }
+          const [hh, mm] = r.time.split(':').map(Number);
+          if (hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+            return res.status(400).json({ success: false, message: `Out-of-range time: ${r.time}` });
+          }
+        }
+
+        // Max 5 reminders per goal — reasonable limit
+        if (reminders.length > 5) {
+          return res.status(400).json({ success: false, message: 'Maximum 5 reminders per goal' });
+        }
+
+        const existingGoal = await db.findGoalById(goalId);
+        if (!existingGoal || existingGoal.user_id !== req.user.id) {
+          return res.status(404).json({ success: false, message: 'Goal not found' });
+        }
+
+        const updatedGoal = await db.updateGoalReminders(goalId, reminders);
+        res.json({ success: true, message: 'Reminders updated successfully', data: updatedGoal });
+
+      } catch (error) {
+        console.error('Update reminders error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+      }
+    });
 
 app.get('/api/goals/:goalId', authenticateToken, async (req, res) => {
   try {

@@ -167,3 +167,30 @@ class AnalyticsError extends GoalState {
   @override
   List<Object?> get props => [message];
 }
+
+class HistoryLogEdited extends GoalState {
+  final String goalId;
+  final String date;
+  final String status;
+  final List<Goal> allGoals;
+
+  const HistoryLogEdited({
+    required this.goalId,
+    required this.date,
+    required this.status,
+    required this.allGoals,
+  });
+
+  @override
+  List<Object?> get props => [goalId, date, status, allGoals];
+}
+
+class GoalRemindersUpdated extends GoalState {
+  final Goal goal;
+  final List<Goal> allGoals;
+
+  const GoalRemindersUpdated({required this.goal, required this.allGoals});
+
+  @override
+  List<Object?> get props => [goal, allGoals];
+}

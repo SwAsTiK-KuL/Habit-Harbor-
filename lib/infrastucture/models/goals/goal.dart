@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:habit_harbor/domain/entities/goals/goal_reminder.dart';
 
 class Goal extends Equatable {
   final String id;
@@ -16,6 +17,7 @@ class Goal extends Equatable {
   final String? todayStatus;
   final String? todayLogId;
   final Map<String, String>? recentLogs;
+  final List<GoalReminder> reminders;
 
   const Goal({
     required this.id,
@@ -33,6 +35,7 @@ class Goal extends Equatable {
     this.todayStatus,
     this.todayLogId,
     this.recentLogs,
+    this.reminders = const [],
   });
 
   @override
@@ -52,6 +55,7 @@ class Goal extends Equatable {
     todayStatus,
     todayLogId,
     recentLogs,
+    reminders,
   ];
 
   Goal copyWith({
@@ -70,6 +74,7 @@ class Goal extends Equatable {
     String? todayStatus,
     String? todayLogId,
     Map<String, String>? recentLogs,
+    List<GoalReminder>? reminders,
   }) {
     return Goal(
       id: id ?? this.id,
@@ -87,6 +92,7 @@ class Goal extends Equatable {
       todayStatus: todayStatus ?? this.todayStatus,
       todayLogId: todayLogId ?? this.todayLogId,
       recentLogs: recentLogs ?? this.recentLogs,
+      reminders: reminders ?? this.reminders,
     );
   }
 }

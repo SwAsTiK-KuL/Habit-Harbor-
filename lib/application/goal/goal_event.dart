@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:habit_harbor/domain/entities/goals/goal_reminder.dart';
 
 abstract class GoalEvent extends Equatable {
   const GoalEvent();
@@ -160,4 +161,32 @@ class LoadGoalLogsForPeriod extends GoalEvent {
 
   @override
   List<Object?> get props => [goalId, period, limit];
+}
+
+// Add at the bottom of the file
+class EditHistoryLog extends GoalEvent {
+  final String goalId;
+  final String date;
+  final String status;
+  final String? notes;
+
+  const EditHistoryLog({
+    required this.goalId,
+    required this.date,
+    required this.status,
+    this.notes,
+  });
+
+  @override
+  List<Object?> get props => [goalId, date, status, notes];
+}
+
+class UpdateGoalReminders extends GoalEvent {
+  final String goalId;
+  final List<GoalReminder> reminders;
+
+  const UpdateGoalReminders({required this.goalId, required this.reminders});
+
+  @override
+  List<Object?> get props => [goalId, reminders];
 }

@@ -61,15 +61,12 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       _isLoading = true;
       _errorMessage = null;
     });
-
-    // Load overview analytics using BLoC
     context.read<GoalBloc>().add(
       LoadOverviewAnalytics(period: _selectedPeriod),
     );
   }
 
   void _loadGoalAnalytics(List<Goal> goals) {
-    // Load individual goal analytics for each goal
     for (final goal in goals) {
       context.read<GoalBloc>().add(
         LoadGoalAnalytics(goalId: goal.id, period: _selectedPeriod),
@@ -77,10 +74,151 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     }
   }
 
-  // Helper method to convert JSON to Goal using your existing structure with null safety
+  // ── History Edit ────────────────────────────────────────────────────────────
+
+  /// Called when the user taps a calendar day cell.
+  /// Blocks future dates and shows a bottom sheet to pick a new status.
+  void _onCalendarDayTapped(
+    BuildContext context,
+    String goalId,
+    String dateStr,
+    String? currentStatus,
+  ) {
+    // Block future dates
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    if (dateStr.compareTo(today) > 0) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header ───────────────────────────────
+              Row(
+                children: [
+                  const Icon(Icons.edit_calendar, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Edit  $dateStr',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              if (currentStatus != null) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: _getColorForStatus(currentStatus, Colors.grey),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Current: $currentStatus',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 16),
+              const Text(
+                'Select new status:',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black54,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // ── Status buttons ────────────────────────
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children:
+                    ['completed', 'missed', 'holiday', 'sick', 'skipped'].map((
+                      status,
+                    ) {
+                      final isCurrentStatus = status == currentStatus;
+                      return ElevatedButton.icon(
+                        onPressed:
+                            isCurrentStatus
+                                ? null // already this status — no-op
+                                : () {
+                                  Navigator.pop(ctx);
+                                  context.read<GoalBloc>().add(
+                                    EditHistoryLog(
+                                      goalId: goalId,
+                                      date: dateStr,
+                                      status: status,
+                                    ),
+                                  );
+                                },
+                        icon: Icon(_getStatusIcon(status), size: 14),
+                        label: Text(
+                          status,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              isCurrentStatus
+                                  ? Colors.grey[300]
+                                  : _getColorForStatus(status, Colors.grey),
+                          foregroundColor:
+                              isCurrentStatus ? Colors.grey[600] : Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'completed':
+        return Icons.check_circle_outline;
+      case 'missed':
+        return Icons.cancel_outlined;
+      case 'holiday':
+        return Icons.beach_access_outlined;
+      case 'sick':
+        return Icons.sick_outlined;
+      case 'skipped':
+        return Icons.skip_next_outlined;
+      default:
+        return Icons.circle_outlined;
+    }
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+
   Goal? _goalFromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
-
     try {
       return Goal(
         id: json['id']?.toString() ?? '',
@@ -104,7 +242,6 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     }
   }
 
-  // Safe parsing helpers
   int? _safeParseInt(dynamic value) {
     if (value == null) return null;
     if (value is int) return value;
@@ -114,11 +251,11 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
 
   DateTime? _safeParseDateTime(dynamic value) {
     if (value == null) return null;
-    if (value is String) {
-      return DateTime.tryParse(value);
-    }
+    if (value is String) return DateTime.tryParse(value);
     return null;
   }
+
+  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -135,28 +272,46 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       ),
       body: BlocConsumer<GoalBloc, GoalState>(
         listener: (context, state) {
+          // ── Overview loaded ───────────────────────────
           if (state is OverviewAnalyticsLoaded) {
             setState(() {
               _overviewData = state.data;
               _isLoading = false;
               _errorMessage = null;
             });
-
-            // Extract goals and load their individual analytics
             final goalsData = _overviewData?['goals'] as List<dynamic>?;
             if (goalsData != null) {
               final goals =
                   goalsData
                       .map((g) => _goalFromJson(g as Map<String, dynamic>?))
-                      .where((goal) => goal != null)
+                      .where((g) => g != null)
                       .cast<Goal>()
                       .toList();
               _loadGoalAnalytics(goals);
             }
+
+            // ── Individual goal analytics loaded ──────────
           } else if (state is GoalAnalyticsLoaded) {
             setState(() {
               _goalAnalytics[state.goalId] = state.data;
             });
+
+            // ── ✅ History edit completed ──────────────────
+          } else if (state is HistoryLogEdited) {
+            // Refresh only the affected goal's analytics so the
+            // calendar cell re-renders with the new colour instantly.
+            context.read<GoalBloc>().add(
+              LoadGoalAnalytics(goalId: state.goalId, period: _selectedPeriod),
+            );
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${state.date} updated to ${state.status}'),
+                backgroundColor: _getColorForStatus(state.status, Colors.grey),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+
+            // ── Analytics error ───────────────────────────
           } else if (state is AnalyticsError) {
             setState(() {
               _isLoading = false;
@@ -189,35 +344,23 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
             );
           }
 
-          if (_errorMessage != null) {
-            return _buildErrorState();
-          }
-
-          if (_overviewData == null) {
-            return _buildEmptyState();
-          }
+          if (_errorMessage != null) return _buildErrorState();
+          if (_overviewData == null) return _buildEmptyState();
 
           final goalsData = _overviewData!['goals'] as List<dynamic>?;
-          if (goalsData == null) {
-            return _buildEmptyState();
-          }
+          if (goalsData == null) return _buildEmptyState();
 
           final goals =
               goalsData
                   .map((g) => _goalFromJson(g as Map<String, dynamic>?))
-                  .where((goal) => goal != null)
+                  .where((g) => g != null)
                   .cast<Goal>()
                   .toList();
 
           return Column(
             children: [
-              // Summary Stats Card
               _buildSummaryStats(),
-
-              // Period Tabs
               _buildPeriodTabs(),
-
-              // Goals List with Real Stats
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
@@ -235,6 +378,8 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       ),
     );
   }
+
+  // ── Error / Empty ────────────────────────────────────────────────────────────
 
   Widget _buildErrorState() {
     return Center(
@@ -275,13 +420,38 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     );
   }
 
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.history, size: 80, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          Text(
+            'No Goals History',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Start tracking goals to see your progress history',
+            style: TextStyle(color: Colors.grey[500]),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Summary Stats ────────────────────────────────────────────────────────────
+
   Widget _buildSummaryStats() {
     final stats = _overviewData?['stats'] as Map<String, dynamic>?;
     final totalGoals = _safeParseInt(_overviewData?['totalGoals']) ?? 0;
-
-    if (stats == null) {
-      return const SizedBox.shrink();
-    }
+    if (stats == null) return const SizedBox.shrink();
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -366,6 +536,8 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     );
   }
 
+  // ── Period Tabs ──────────────────────────────────────────────────────────────
+
   Widget _buildPeriodTabs() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -383,6 +555,8 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       ),
     );
   }
+
+  // ── Goals List ───────────────────────────────────────────────────────────────
 
   Widget _buildGoalsList(List<Goal> goals, String period) {
     if (goals.isEmpty) {
@@ -411,30 +585,27 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     }
 
     return RefreshIndicator(
-      onRefresh: () async {
-        _loadAnalyticsData();
-      },
+      onRefresh: () async => _loadAnalyticsData(),
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: goals.length,
         itemBuilder: (context, index) {
           final goal = goals[index];
-          final analytics = _goalAnalytics[goal.id];
-          return _buildGoalStatsCard(goal, analytics);
+          return _buildGoalStatsCard(goal, _goalAnalytics[goal.id]);
         },
       ),
     );
   }
 
+  // ── Goal Stats Card ──────────────────────────────────────────────────────────
+
   Widget _buildGoalStatsCard(Goal goal, Map<String, dynamic>? analytics) {
     Color goalColor = Colors.deepPurple;
     try {
       goalColor = Color(int.parse(goal.color.replaceFirst('#', '0xff')));
-    } catch (e) {
-      // Default color if parsing fails
-    }
+    } catch (_) {}
 
-    // Extract real stats from server data or show loading
+    // Loading skeleton while per-goal analytics arrive
     if (analytics == null) {
       return Card(
         margin: const EdgeInsets.only(bottom: 16),
@@ -534,7 +705,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Real Stats Row
+                // Stats row
                 Row(
                   children: [
                     Expanded(
@@ -573,23 +744,39 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
                 ),
                 const SizedBox(height: 16),
 
-                // Real Status Breakdown
                 const Text(
                   'Status Breakdown',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const SizedBox(height: 8),
                 _buildRealStatusBreakdown(stats),
-
                 const SizedBox(height: 16),
 
-                // Real Calendar View
-                const Text(
-                  'Calendar View',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                // ✅ "Tap a day to edit" hint
+                Row(
+                  children: [
+                    const Text(
+                      'Calendar View',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '(tap a day to edit)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[500],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
-                _buildRealCalendar(logs, goalColor),
+
+                // ✅ goalId is now passed down so taps can fire EditHistoryLog
+                _buildRealCalendar(logs, goalColor, goal.id),
               ],
             ),
           ),
@@ -597,6 +784,8 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       ),
     );
   }
+
+  // ── Status Breakdown ─────────────────────────────────────────────────────────
 
   Widget _buildRealStatusBreakdown(Map<String, dynamic> stats) {
     final statuses = [
@@ -645,7 +834,6 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
           statuses.map((status) {
             final value = status['value'] as int;
             if (value == 0) return const SizedBox.shrink();
-
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -675,7 +863,14 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     );
   }
 
-  Widget _buildRealCalendar(List<dynamic> logs, Color goalColor) {
+  // ── Calendar ─────────────────────────────────────────────────────────────────
+
+  /// ✅ Accepts [goalId] so each cell can trigger an edit.
+  Widget _buildRealCalendar(
+    List<dynamic> logs,
+    Color goalColor,
+    String goalId, // ← NEW
+  ) {
     final Map<String, String> logMap = {};
     for (final log in logs) {
       if (log is Map<String, dynamic>) {
@@ -688,7 +883,6 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     final dates = _getDateRangeForPeriod(_selectedPeriod);
     if (dates.isEmpty) return const SizedBox.shrink();
 
-    // ✅ Group dates by year-month
     final Map<String, List<DateTime>> monthGroups = {};
     for (final date in dates) {
       final key = DateFormat('yyyy-MM').format(date);
@@ -701,7 +895,13 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
         ...monthGroups.entries.map((entry) {
           final monthDates = entry.value;
           final monthLabel = DateFormat('MMMM yyyy').format(monthDates.first);
-          return _buildMonthGrid(monthLabel, monthDates, logMap, goalColor);
+          return _buildMonthGrid(
+            monthLabel,
+            monthDates,
+            logMap,
+            goalColor,
+            goalId, // ← NEW
+          );
         }),
         const SizedBox(height: 8),
         Wrap(
@@ -720,11 +920,13 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     );
   }
 
+  /// ✅ Accepts [goalId] and wraps each day cell in a GestureDetector.
   Widget _buildMonthGrid(
     String monthLabel,
     List<DateTime> monthDates,
     Map<String, String> logMap,
     Color goalColor,
+    String goalId, // ← NEW
   ) {
     final firstDay = monthDates.first;
     final startPadding = (firstDay.weekday - 1) % 7;
@@ -761,7 +963,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Month header ─────────────────────────────
+          // Month header
           Text(
             monthLabel,
             style: const TextStyle(
@@ -772,7 +974,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
           ),
           const SizedBox(height: 8),
 
-          // ── Day headers ──────────────────────────────
+          // Day-of-week headers
           Row(
             children:
                 ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -794,45 +996,60 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
           ),
           const SizedBox(height: 4),
 
-          // ── Week rows ────────────────────────────────
+          // Week rows
           ...weeks.map(
             (week) => Padding(
               padding: const EdgeInsets.only(bottom: 2),
               child: Row(
                 children:
                     week.map((date) {
-                      if (date == null)
+                      // Empty padding cell
+                      if (date == null) {
                         return const Expanded(child: SizedBox(height: 28));
+                      }
 
                       final dateStr = DateFormat('yyyy-MM-dd').format(date);
                       final status = logMap[dateStr];
                       final isToday = dateStr == todayStr;
+                      final isFuture = dateStr.compareTo(todayStr) > 0;
 
                       return Expanded(
-                        child: Container(
-                          height: 28,
-                          margin: const EdgeInsets.symmetric(horizontal: 1),
-                          decoration: BoxDecoration(
-                            color: _getColorForStatus(status, goalColor),
-                            borderRadius: BorderRadius.circular(4),
-                            border:
-                                isToday
-                                    ? Border.all(
-                                      color: Colors.black54,
-                                      width: 1.5,
-                                    )
-                                    : null,
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${date.day}',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w500,
-                                color:
-                                    status != null
-                                        ? Colors.white
-                                        : Colors.grey[500],
+                        // ✅ GestureDetector wraps the cell
+                        child: GestureDetector(
+                          onTap:
+                              isFuture
+                                  ? null // silently ignore future taps
+                                  : () => _onCalendarDayTapped(
+                                    context,
+                                    goalId,
+                                    dateStr,
+                                    status,
+                                  ),
+                          child: Container(
+                            height: 28,
+                            margin: const EdgeInsets.symmetric(horizontal: 1),
+                            decoration: BoxDecoration(
+                              color: _getColorForStatus(status, goalColor),
+                              borderRadius: BorderRadius.circular(4),
+                              border:
+                                  isToday
+                                      ? Border.all(
+                                        color: Colors.black54,
+                                        width: 1.5,
+                                      )
+                                      : null,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${date.day}',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w500,
+                                  color:
+                                      status != null
+                                          ? Colors.white
+                                          : Colors.grey[500],
+                                ),
                               ),
                             ),
                           ),
@@ -846,6 +1063,8 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       ),
     );
   }
+
+  // ── Misc Widgets ─────────────────────────────────────────────────────────────
 
   Widget _buildLegendItem(String label, Color color) {
     return Row(
@@ -869,11 +1088,9 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     return LayoutBuilder(
       builder: (context, constraints) {
         final totalWidth = constraints.maxWidth;
-        final filledWidth = (totalWidth * progress.clamp(0.0, 1.0));
-
+        final filledWidth = totalWidth * progress.clamp(0.0, 1.0);
         return Stack(
           children: [
-            // ── Background (empty) ─────────────────────
             Container(
               height: 6,
               width: totalWidth,
@@ -882,7 +1099,6 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
-            // ── Foreground (filled) ────────────────────
             Container(
               height: 6,
               width: filledWidth,
@@ -924,33 +1140,8 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.history, size: 80, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(
-            'No Goals History',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Start tracking goals to see your progress history',
-            style: TextStyle(color: Colors.grey[500]),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+  // ── Helper Methods ───────────────────────────────────────────────────────────
 
-  // Helper Methods
   IconData _getGoalIcon(String iconName) {
     switch (iconName.toLowerCase()) {
       case 'fitness':
@@ -991,9 +1182,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
 
   List<DateTime> _getDateRangeForPeriod(String period) {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
 
-    // ✅ How many months back each period covers
     final int monthsBack;
     switch (period) {
       case 'month':
@@ -1012,19 +1201,14 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
         monthsBack = 1;
     }
 
-    // ✅ Start = first day of (current month - monthsBack + 1)
-    // e.g. for quarter in Feb 2026 → start = Dec 1 2025
     final startMonth = now.month - monthsBack + 1;
     final startYear = now.year + (startMonth <= 0 ? -1 : 0);
     final adjustedStartMonth = startMonth <= 0 ? startMonth + 12 : startMonth;
-
     final start = DateTime(startYear, adjustedStartMonth, 1);
-
-    // ✅ End = last day of current month
     final end = DateTime(now.year, now.month + 1, 0);
 
     final daysDiff = end.difference(start).inDays + 1;
-    return List.generate(daysDiff, (index) => start.add(Duration(days: index)));
+    return List.generate(daysDiff, (i) => start.add(Duration(days: i)));
   }
 
   Color _getColorForStatus(String? status, Color goalColor) {

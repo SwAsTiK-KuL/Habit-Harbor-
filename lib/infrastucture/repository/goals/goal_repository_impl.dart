@@ -1,4 +1,5 @@
 import 'package:dartz/dartz.dart';
+import 'package:habit_harbor/domain/entities/goals/goal_reminder.dart';
 
 import '../../../core/exceptions/exception.dart';
 import '../../../core/failures/failures.dart';
@@ -285,6 +286,52 @@ class GoalRepositoryImpl implements GoalRepository {
         limit: limit,
       );
       return Right(logs);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    } catch (e) {
+      return Left(ServerFailure('Unexpected error occurred'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, GoalLog>> editHistoryLog({
+    required String goalId,
+    required String date,
+    required String status,
+    String? notes,
+  }) async {
+    try {
+      final log = await remoteDataSource.editHistoryLog(
+        goalId: goalId,
+        date: date,
+        status: status,
+        notes: notes,
+      );
+      return Right(log);
+    } on ServerException catch (e) {
+      return Left(ServerFailure(e.message));
+    } on NetworkException catch (e) {
+      return Left(NetworkFailure(e.message));
+    } on ValidationException catch (e) {
+      return Left(ValidationFailure(e.message));
+    } catch (e) {
+      return Left(ServerFailure('Unexpected error occurred'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Goal>> updateGoalReminders({
+    required String goalId,
+    required List<GoalReminder> reminders,
+  }) async {
+    try {
+      final goal = await remoteDataSource.updateGoalReminders(
+        goalId: goalId,
+        reminders: reminders,
+      );
+      return Right(goal);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {

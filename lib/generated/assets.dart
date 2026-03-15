@@ -2,6 +2,7 @@
 class Assets {
   Assets._();
 
+  static const String imagesSplashImage = 'assets/images/splash_image.png';
   static const String interInterItalicVariableFontOpsz,
       wght = 'assets/fonts/Inter/Inter-Italic-VariableFont_opsz,wght.ttf';
   static const String interInterVariableFontOpsz,

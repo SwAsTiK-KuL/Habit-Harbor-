@@ -1,4 +1,5 @@
 import 'package:dartz/dartz.dart';
+import 'package:habit_harbor/domain/entities/goals/goal_reminder.dart';
 import 'package:habit_harbor/infrastucture/models/goals/goal.dart';
 
 import '../../../core/failures/failures.dart';
@@ -73,5 +74,17 @@ abstract class GoalRepository {
     required String goalId,
     String period = 'month',
     int limit = 365,
+  });
+
+  Future<Either<Failure, GoalLog>> editHistoryLog({
+    required String goalId,
+    required String date,
+    required String status,
+    String? notes,
+  });
+
+  Future<Either<Failure, Goal>> updateGoalReminders({
+    required String goalId,
+    required List<GoalReminder> reminders,
   });
 }

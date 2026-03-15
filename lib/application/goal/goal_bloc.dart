@@ -42,6 +42,8 @@ class GoalBloc extends Bloc<GoalEvent, GoalState> {
     on<LoadGoalStats>(_onLoadGoalStats);
     on<UpdateGoalLogStatus>(_onUpdateGoalLogStatus);
     on<GoalErrorCleared>(_onGoalErrorCleared);
+    on<EditHistoryLog>(_onEditHistoryLog);
+    on<UpdateGoalReminders>(_onUpdateGoalReminders);
 
     // ✅ Analytics event handlers
     on<LoadOverviewAnalytics>(_onLoadOverviewAnalytics);
@@ -427,5 +429,73 @@ class GoalBloc extends Bloc<GoalEvent, GoalState> {
     }
 
     return {'general': message};
+  }
+
+  Future<void> _onEditHistoryLog(
+    EditHistoryLog event,
+    Emitter<GoalState> emit,
+  ) async {
+    emit(GoalActionLoading(goals: _currentGoals));
+
+    final result = await goalRepository.editHistoryLog(
+      goalId: event.goalId,
+      date: event.date,
+      status: event.status,
+      notes: event.notes,
+    );
+
+    result.fold(
+      (failure) => emit(GoalError(message: _getFailureMessage(failure))),
+      (goalLog) async {
+        if (emit.isDone) return;
+
+        final goalsResult = await getAllGoalsUseCase();
+        if (emit.isDone) return;
+
+        goalsResult.fold(
+          (failure) => emit(GoalError(message: _getFailureMessage(failure))),
+          (goals) {
+            _currentGoals = goals;
+            emit(
+              HistoryLogEdited(
+                goalId: event.goalId,
+                date: event.date,
+                status: event.status,
+                allGoals: goals,
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // CORRECT — runs silently in background, no loading state
+  Future<void> _onUpdateGoalReminders(
+    UpdateGoalReminders event,
+    Emitter<GoalState> emit,
+  ) async {
+    final result = await goalRepository.updateGoalReminders(
+      goalId: event.goalId,
+      reminders: event.reminders,
+    );
+
+    result.fold(
+      (failure) {
+        print('⚠️ Failed to save reminders: ${_getFailureMessage(failure)}');
+      },
+      (goal) async {
+        final goalsResult = await getAllGoalsUseCase();
+        goalsResult.fold(
+          (failure) => print('⚠️ Goals reload failed after reminders update'),
+          (goals) {
+            _currentGoals = goals;
+            if (!emit.isDone) {
+              emit(GoalRemindersUpdated(goal: goal, allGoals: goals));
+            }
+          },
+        );
+      },
+    );
   }
 }

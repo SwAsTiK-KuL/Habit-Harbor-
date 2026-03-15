@@ -1,4 +1,6 @@
 import 'goal.dart';
+import '../../../domain/entities/goals/goal_reminder.dart';
+import 'goal_reminder_model.dart';
 
 class GoalModel {
   final String id;
@@ -16,6 +18,7 @@ class GoalModel {
   final String? todayStatus;
   final String? todayLogId;
   final Map<String, String>? recentLogs;
+  final List<GoalReminder> reminders; // ← NEW
 
   const GoalModel({
     required this.id,
@@ -33,6 +36,7 @@ class GoalModel {
     this.todayStatus,
     this.todayLogId,
     this.recentLogs,
+    required this.reminders, // ← NEW
   });
 
   factory GoalModel.fromJson(Map<String, dynamic> json) {
@@ -55,6 +59,15 @@ class GoalModel {
           json['recentLogs'] != null
               ? Map<String, String>.from(json['recentLogs'] as Map)
               : null,
+      reminders:
+          (json['reminders'] as List<dynamic>? ?? []) // ← NEW
+              .map(
+                (r) =>
+                    GoalReminderModel.fromJson(
+                      r as Map<String, dynamic>,
+                    ).toEntity(),
+              )
+              .toList(),
     );
   }
 
@@ -75,10 +88,21 @@ class GoalModel {
       'today_status': todayStatus,
       'today_log_id': todayLogId,
       'recentLogs': recentLogs,
+      'reminders':
+          reminders
+              .map(
+                (r) => {
+                  // ← NEW
+                  'id': r.id,
+                  'time': r.time,
+                  'label': r.label,
+                  'enabled': r.enabled,
+                },
+              )
+              .toList(),
     };
   }
 
-  // Convert to domain entity
   Goal toEntity() {
     return Goal(
       id: id,
@@ -96,10 +120,10 @@ class GoalModel {
       todayStatus: todayStatus,
       todayLogId: todayLogId,
       recentLogs: recentLogs,
+      reminders: reminders,
     );
   }
 
-  // Create from domain entity
   factory GoalModel.fromEntity(Goal goal) {
     return GoalModel(
       id: goal.id,
@@ -117,6 +141,7 @@ class GoalModel {
       todayStatus: goal.todayStatus,
       todayLogId: goal.todayLogId,
       recentLogs: goal.recentLogs,
+      reminders: goal.reminders,
     );
   }
 }

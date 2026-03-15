@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it/get_it.dart';
+import 'package:habit_harbor/presentation/auth/login_screen.dart';
+import 'package:habit_harbor/presentation/splash_screen/splash_screen.dart';
 
 import 'application/auth/auth_bloc.dart';
 import 'application/auth/auth_event.dart';
@@ -39,8 +41,8 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
+  @override
   Widget build(BuildContext context) {
-    // ✅ MultiBlocProvider wraps MaterialApp, not inside it
     return MultiBlocProvider(
       providers: [
         BlocProvider(create: (context) => GetIt.instance<AuthBloc>()),
@@ -63,7 +65,11 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const AppInitializer(),
+        home: const SplashScreen(),
+        routes: {
+          '/home': (context) => const AppView(),
+          '/login': (context) => const LoginScreen(),
+        },
       ),
     );
   }

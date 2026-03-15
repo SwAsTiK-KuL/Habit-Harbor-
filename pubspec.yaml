@@ -90,6 +90,7 @@ flutter:
   assets:
     - server/.env
     - assets/logo/
+    - assets/images/
 
   # Custom Fonts for Beautiful Typography
   fonts:

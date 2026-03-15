@@ -6,6 +6,7 @@ import '../../application/goal/goal_event.dart';
 import '../../application/goal/goal_state.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/widgets/custom_text_field.dart';
+import '../../domain/entities/goals/goal_reminder.dart';
 import '../../infrastucture/models/goals/goal.dart';
 
 class CreateGoalScreen extends StatefulWidget {
@@ -28,6 +29,9 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
   int _targetCount = 1;
   String _selectedColor = '#4CAF50';
   String _selectedIcon = 'fitness';
+
+  // ✅ Reminders state
+  List<GoalReminder> _reminders = [];
 
   final List<String> _categories = [
     'Health',
@@ -114,6 +118,8 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
     super.dispose();
   }
 
+  // ── Snackbar ─────────────────────────────────────────────────────────────────
+
   void _showClassicSnackbar(
     BuildContext context, {
     required String title,
@@ -185,6 +191,8 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
     );
   }
 
+  // ── Actions ──────────────────────────────────────────────────────────────────
+
   void _handleCreateGoal() {
     if (_formKey.currentState?.validate() != true) return;
     try {
@@ -210,6 +218,77 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
     }
   }
 
+  // ── Reminders helpers ────────────────────────────────────────────────────────
+
+  String _generateReminderId() =>
+      DateTime.now().millisecondsSinceEpoch.toString();
+
+  void _addReminder() {
+    if (_reminders.length >= 5) return;
+    setState(() {
+      _reminders.add(
+        GoalReminder(
+          id: _generateReminderId(),
+          time: '08:00',
+          label: '',
+          enabled: true,
+        ),
+      );
+    });
+  }
+
+  void _deleteReminder(int index) => setState(() => _reminders.removeAt(index));
+
+  void _toggleReminder(int index, bool val) {
+    setState(() {
+      final r = _reminders[index];
+      _reminders[index] = GoalReminder(
+        id: r.id,
+        time: r.time,
+        label: r.label,
+        enabled: val,
+      );
+    });
+  }
+
+  Future<void> _pickReminderTime(int index) async {
+    final r = _reminders[index];
+    final parts = r.time.split(':');
+    final initial = TimeOfDay(
+      hour: int.parse(parts[0]),
+      minute: int.parse(parts[1]),
+    );
+
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked == null) return;
+
+    final timeStr =
+        '${picked.hour.toString().padLeft(2, '0')}:'
+        '${picked.minute.toString().padLeft(2, '0')}';
+
+    setState(() {
+      _reminders[index] = GoalReminder(
+        id: r.id,
+        time: timeStr,
+        label: r.label,
+        enabled: r.enabled,
+      );
+    });
+  }
+
+  void _updateReminderLabel(int index, String val) {
+    // No setState needed here — doesn't affect layout, called from onChanged
+    final r = _reminders[index];
+    _reminders[index] = GoalReminder(
+      id: r.id,
+      time: r.time,
+      label: val,
+      enabled: r.enabled,
+    );
+  }
+
+  // ── Misc helpers ─────────────────────────────────────────────────────────────
+
   Color _getColorFromHex(String hexColor) {
     try {
       return Color(int.parse(hexColor.replaceFirst('#', '0xff')));
@@ -221,11 +300,13 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
   IconData _getSelectedIconData() {
     for (final group in _iconGroups) {
       for (final icon in group['icons'] as List) {
-        if (icon['value'] == _selectedIcon) return icon['icon'];
+        if (icon['value'] == _selectedIcon) return icon['icon'] as IconData;
       }
     }
     return Icons.star;
   }
+
+  // ── Error / Fallback screen ──────────────────────────────────────────────────
 
   Widget _buildWithGoalBloc(BuildContext context) {
     try {
@@ -262,6 +343,8 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
       ),
     );
   }
+
+  // ── Common widget helpers ────────────────────────────────────────────────────
 
   Widget _sectionLabel(String text, IconData icon) {
     return Row(
@@ -316,6 +399,8 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
     );
   }
 
+  // ── Main screen ──────────────────────────────────────────────────────────────
+
   Widget _buildScreen(BuildContext context) {
     final accent = _getColorFromHex(_selectedColor);
 
@@ -349,15 +434,31 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
       ),
       body: BlocConsumer<GoalBloc, GoalState>(
         listener: (context, state) {
+          // ── Goal created ────────────────────────────────
           if (state is GoalCreated) {
+            // Pop and show snackbar immediately regardless of reminders
             Navigator.pop(context);
+            final active = _reminders.where((r) => r.enabled).length;
             _showClassicSnackbar(
               context,
               title: 'Goal Created!',
-              subtitle: 'Your new habit has been added ',
+              subtitle:
+                  active > 0
+                      ? 'Added with $active active reminder${active > 1 ? 's' : ''}'
+                      : 'Your new habit has been added',
               icon: Icons.check_rounded,
               iconColor: Colors.green,
             );
+
+            // Fire reminders update in background — don't wait for it
+            if (_reminders.isNotEmpty) {
+              context.read<GoalBloc>().add(
+                UpdateGoalReminders(
+                  goalId: state.goal.id,
+                  reminders: _reminders,
+                ),
+              );
+            }
           } else if (state is GoalError) {
             _showClassicSnackbar(
               context,
@@ -390,7 +491,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // ── DETAILS ──────────────────────────────────
+                    // ── DETAILS ────────────────────────────
                     _classicCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -421,7 +522,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
                     ),
                     const SizedBox(height: 12),
 
-                    // ── CATEGORY ─────────────────────────────────
+                    // ── CATEGORY ───────────────────────────
                     _classicCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -483,7 +584,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
                     ),
                     const SizedBox(height: 12),
 
-                    // ── FREQUENCY ────────────────────────────────
+                    // ── FREQUENCY ──────────────────────────
                     _classicCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -582,7 +683,192 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
                     ),
                     const SizedBox(height: 12),
 
-                    // ── APPEARANCE ───────────────────────────────
+                    // ── REMINDERS ──────────────────────────
+                    _classicCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionLabel(
+                            'REMINDERS',
+                            Icons.notifications_outlined,
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Existing reminders list
+                          ..._reminders.asMap().entries.map((entry) {
+                            final i = entry.key;
+                            final r = entry.value;
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color:
+                                        r.enabled
+                                            ? accent.withOpacity(0.25)
+                                            : Colors.grey[200]!,
+                                  ),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                child: Row(
+                                  children: [
+                                    // Toggle
+                                    Transform.scale(
+                                      scale: 0.85,
+                                      child: Switch(
+                                        value: r.enabled,
+                                        activeColor: accent,
+                                        onChanged:
+                                            (val) => _toggleReminder(i, val),
+                                      ),
+                                    ),
+
+                                    // Time chip
+                                    GestureDetector(
+                                      onTap: () => _pickReminderTime(i),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: accent.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.access_time,
+                                              size: 12,
+                                              color: accent,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              r.time,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: accent,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+
+                                    // Label field
+                                    Expanded(
+                                      child: TextField(
+                                        decoration: const InputDecoration(
+                                          hintText: 'Label (optional)',
+                                          border: InputBorder.none,
+                                          isDense: true,
+                                          hintStyle: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.black38,
+                                          ),
+                                        ),
+                                        style: const TextStyle(fontSize: 13),
+                                        onChanged:
+                                            (val) =>
+                                                _updateReminderLabel(i, val),
+                                      ),
+                                    ),
+
+                                    // Delete
+                                    GestureDetector(
+                                      onTap: () => _deleteReminder(i),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        child: const Icon(
+                                          Icons.delete_outline,
+                                          color: Colors.red,
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+
+                          // Empty hint
+                          if (_reminders.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Text(
+                                'No reminders set',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                            ),
+
+                          // Add reminder button (max 5)
+                          if (_reminders.length < 5)
+                            GestureDetector(
+                              onTap: _addReminder,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 11,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: accent.withOpacity(0.35),
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                  color: accent.withOpacity(0.04),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.add, size: 16, color: accent),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _reminders.isEmpty
+                                          ? 'Add Reminder'
+                                          : 'Add Another Reminder',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: accent,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                          // Limit reached hint
+                          if (_reminders.length >= 5)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Maximum 5 reminders per goal',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey[400],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // ── APPEARANCE ─────────────────────────
                     _classicCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -610,11 +896,15 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
                               itemBuilder: (_, i) {
                                 final c = _colors[i];
                                 final isSelected = _selectedColor == c['value'];
-                                final col = _getColorFromHex(c['value']);
+                                final col = _getColorFromHex(
+                                  c['value'] as String,
+                                );
                                 return GestureDetector(
                                   onTap:
                                       () => setState(
-                                        () => _selectedColor = c['value'],
+                                        () =>
+                                            _selectedColor =
+                                                c['value'] as String,
                                       ),
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 150),
@@ -721,7 +1011,8 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
                                                   () => setState(
                                                     () =>
                                                         _selectedIcon =
-                                                            iconData['value'],
+                                                            iconData['value']
+                                                                as String,
                                                   ),
                                               child: Column(
                                                 mainAxisSize: MainAxisSize.min,
@@ -768,7 +1059,8 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
                                                               : [],
                                                     ),
                                                     child: Icon(
-                                                      iconData['icon'],
+                                                      iconData['icon']
+                                                          as IconData,
                                                       color:
                                                           isSelected
                                                               ? accent
@@ -779,7 +1071,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
                                                   ),
                                                   const SizedBox(height: 5),
                                                   Text(
-                                                    iconData['name'],
+                                                    iconData['name'] as String,
                                                     style: TextStyle(
                                                       fontSize: 10,
                                                       color:
@@ -859,12 +1151,36 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                       const SizedBox(height: 2),
-                                      Text(
-                                        '$_selectedCategory · ${_selectedFrequency.capitalize()}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[500],
-                                        ),
+                                      Row(
+                                        children: [
+                                          Text(
+                                            '$_selectedCategory · ${_selectedFrequency.capitalize()}',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[500],
+                                            ),
+                                          ),
+                                          // ✅ Show reminder count in preview
+                                          if (_reminders.any(
+                                            (r) => r.enabled,
+                                          )) ...[
+                                            const SizedBox(width: 6),
+                                            Icon(
+                                              Icons.notifications_active,
+                                              size: 11,
+                                              color: accent,
+                                            ),
+                                            const SizedBox(width: 2),
+                                            Text(
+                                              '${_reminders.where((r) => r.enabled).length}',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: accent,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -877,7 +1193,7 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
                     ),
                     const SizedBox(height: 28),
 
-                    // ── CREATE BUTTON ─────────────────────────────
+                    // ── CREATE BUTTON ──────────────────────
                     CustomButton(
                       text: 'Create Goal',
                       onPressed: isLoading ? null : _handleCreateGoal,
@@ -898,5 +1214,5 @@ class _CreateGoalScreenState extends State<CreateGoalScreen>
 }
 
 extension StringExtension on String {
-  String capitalize() => "${this[0].toUpperCase()}${this.substring(1)}";
+  String capitalize() => '${this[0].toUpperCase()}${substring(1)}';
 }

@@ -264,6 +264,7 @@ class MongoDB {
       icon:             goalData.icon             || 'star',
       target_frequency: goalData.target_frequency || 'daily',
       target_count:     goalData.target_count     || 1,
+      reminders:        goalData.reminders        || [],
       is_active:        true,
       created_at:       new Date(),
       updated_at:       new Date()
@@ -343,6 +344,22 @@ class MongoDB {
     return await this.findGoalById(goalId);
   }
 
+  async updateGoalReminders(goalId, reminders) {
+    const db = await this.connect();
+    let query;
+    try {
+      query = { _id: new ObjectId(goalId), is_active: true };
+    } catch {
+      query = { id: goalId, is_active: true };
+    }
+    await db.collection('goals').updateOne(
+      query,
+      { $set: { reminders, updated_at: new Date() } }
+    );
+    console.log(`✅ Reminders updated for goal ${goalId}: ${reminders.length} reminder(s)`);
+    return await this.findGoalById(goalId);
+  }
+
   async deleteGoal(goalId, userId) {
     const db = await this.connect();
     let query;
@@ -366,13 +383,15 @@ class MongoDB {
   async createGoalLog(logData) {
     const db = await this.connect();
     const log = {
-      goal_id:    logData.goal_id,
-      user_id:    logData.user_id,
-      date:       logData.date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
-      status:     logData.status,
-      notes:      logData.notes || '',
-      created_at: new Date(),
-      updated_at: new Date()
+      goal_id:           logData.goal_id,
+      user_id:           logData.user_id,
+      date:              logData.date || new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
+      status:            logData.status,
+      notes:             logData.notes || '',
+      is_auto_completed: logData.is_auto_completed ?? false,
+      is_manual_edit:    false,
+      created_at:        new Date(),
+      updated_at:        new Date()
     };
     const result = await db.collection('goal_logs').insertOne(log);
     log.id = result.insertedId.toString();
@@ -478,6 +497,39 @@ class MongoDB {
   async getFCMTokensByUserId(userId) {
     const db = await this.connect();
     return await db.collection('fcm_tokens').find({ user_id: userId }).toArray();
+  }
+
+  async getGoalsWithReminderDue(timeStr) {
+    const db = await this.connect();
+
+    // Find all active goals where reminders array has an entry
+    // with this exact time that is enabled
+    const goals = await db.collection('goals').find({
+      is_active: true,
+      reminders: { $elemMatch: { time: timeStr, enabled: true } }
+    }).toArray();
+
+    goals.forEach(g => { g.id = g._id.toString(); });
+
+    if (goals.length === 0) return [];
+
+    // For each goal, attach its user's FCM tokens
+    const userIds = [...new Set(goals.map(g => g.user_id))];
+    const tokenDocs = await db.collection('fcm_tokens').find({
+      user_id: { $in: userIds }
+    }).toArray();
+
+    // Group tokens by user_id for O(1) lookup
+    const tokensByUser = {};
+    for (const doc of tokenDocs) {
+      if (!tokensByUser[doc.user_id]) tokensByUser[doc.user_id] = [];
+      tokensByUser[doc.user_id].push(doc.fcm_token);
+    }
+
+    return goals.map(g => ({
+      ...g,
+      fcmTokens: tokensByUser[g.user_id] || []
+    }));
   }
 
   async getUsersWithUnloggedGoalsToday() {
