@@ -272,8 +272,8 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
       ),
       body: BlocConsumer<GoalBloc, GoalState>(
         listener: (context, state) {
-          // ── Overview loaded ───────────────────────────
           if (state is OverviewAnalyticsLoaded) {
+            if (state.period != _selectedPeriod) return;
             setState(() {
               _overviewData = state.data;
               _isLoading = false;
@@ -289,17 +289,12 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
                       .toList();
               _loadGoalAnalytics(goals);
             }
-
-            // ── Individual goal analytics loaded ──────────
           } else if (state is GoalAnalyticsLoaded) {
+            if (state.period != _selectedPeriod) return;
             setState(() {
               _goalAnalytics[state.goalId] = state.data;
             });
-
-            // ── ✅ History edit completed ──────────────────
           } else if (state is HistoryLogEdited) {
-            // Refresh only the affected goal's analytics so the
-            // calendar cell re-renders with the new colour instantly.
             context.read<GoalBloc>().add(
               LoadGoalAnalytics(goalId: state.goalId, period: _selectedPeriod),
             );
@@ -310,8 +305,6 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
                 duration: const Duration(seconds: 2),
               ),
             );
-
-            // ── Analytics error ───────────────────────────
           } else if (state is AnalyticsError) {
             setState(() {
               _isLoading = false;
@@ -1182,30 +1175,34 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
 
   List<DateTime> _getDateRangeForPeriod(String period) {
     final now = DateTime.now();
+    DateTime start;
+    DateTime end;
 
-    final int monthsBack;
     switch (period) {
       case 'month':
-        monthsBack = 1;
+        start = DateTime(now.year, now.month, 1);
+        end = DateTime(now.year, now.month + 1, 0);
         break;
       case 'quarter':
-        monthsBack = 3;
+        start = DateTime(
+          now.year,
+          now.month - 2,
+          1,
+        ); // 3 months total, including current
+        end = DateTime(now.year, now.month + 1, 0); // end of current month
         break;
       case 'halfyear':
-        monthsBack = 6;
+        start = DateTime(now.year, now.month - 5, 1);
+        end = DateTime(now.year, now.month + 1, 0);
         break;
       case 'year':
-        monthsBack = 12;
+        start = DateTime(now.year, 1, 1);
+        end = now;
         break;
       default:
-        monthsBack = 1;
+        start = DateTime(now.year, now.month, 1);
+        end = DateTime(now.year, now.month + 1, 0);
     }
-
-    final startMonth = now.month - monthsBack + 1;
-    final startYear = now.year + (startMonth <= 0 ? -1 : 0);
-    final adjustedStartMonth = startMonth <= 0 ? startMonth + 12 : startMonth;
-    final start = DateTime(startYear, adjustedStartMonth, 1);
-    final end = DateTime(now.year, now.month + 1, 0);
 
     final daysDiff = end.difference(start).inDays + 1;
     return List.generate(daysDiff, (i) => start.add(Duration(days: i)));

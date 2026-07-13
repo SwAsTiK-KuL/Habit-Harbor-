@@ -3,34 +3,40 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
   // ─── Base URLs ────────────────────────────────────────────
-
-  //For Locally Run Server
-  static const String defaultAuthBaseUrl = 'http://10.0.2.2:3000/api/auth';
-  static const String defaultGoalsBaseUrl = 'http://10.0.2.2:3000/api';
-
   // static const String defaultAuthBaseUrl =
   //     'https://habit-harbor-backend-deploy.vercel.app/api/auth';
   // static const String defaultGoalsBaseUrl =
   //     'https://habit-harbor-backend-deploy.vercel.app/api';
 
-  // ✅ Updated key names to match StorageService
+  //For Locally Run Server
+  static const String defaultAuthBaseUrl = 'http://10.207.134.23:3000/api/auth';
+  static const String defaultGoalsBaseUrl = 'http://10.207.134.23:3000/api';
+
   static const String accessTokenKey = 'access_token';
   static const String refreshTokenKey = 'refresh_token';
 
   late Dio _dio;
-  String? _authToken;
   final String baseUrl;
 
+  // ✅ FIX: SharedPreferences is injected, not fetched inside interceptors.
+  // Calling SharedPreferences.getInstance() inside a Dio interceptor (async)
+  // causes a deadlock in release mode — the interceptor hangs waiting for
+  // getInstance() which is locked by another operation, freezing the entire
+  // network call and leaving AuthBloc permanently stuck on AuthLoading.
+  final SharedPreferences _prefs;
+
   // ─── Constructors ────────────────────────────────────────
-  ApiClient({String? customBaseUrl})
-    : baseUrl = customBaseUrl ?? defaultAuthBaseUrl {
+
+  ApiClient({required SharedPreferences prefs, String? customBaseUrl})
+    : baseUrl = customBaseUrl ?? defaultAuthBaseUrl,
+      _prefs = prefs {
     print('🔵 ApiClient created with baseUrl: $baseUrl');
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
-        sendTimeout: const Duration(seconds: 10),
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(seconds: 30),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -38,22 +44,25 @@ class ApiClient {
       ),
     );
     _setupInterceptors();
-    _loadAuthToken();
   }
 
-  ApiClient.forAuth() : this(customBaseUrl: defaultAuthBaseUrl);
-  ApiClient.forGoals() : this(customBaseUrl: defaultGoalsBaseUrl);
+  // ✅ Named constructors now require prefs to be passed in.
+  // Use ApiClient.forAuth(prefs: sl()) in injection_container.dart.
+  ApiClient.forAuth({required SharedPreferences prefs})
+    : this(prefs: prefs, customBaseUrl: defaultAuthBaseUrl);
+
+  ApiClient.forGoals({required SharedPreferences prefs})
+    : this(prefs: prefs, customBaseUrl: defaultGoalsBaseUrl);
 
   // ─── Interceptors ────────────────────────────────────────
 
   void _setupInterceptors() {
     _dio.interceptors.add(
       InterceptorsWrapper(
-        // ── Attach access token to every request ───────────
-        onRequest: (options, handler) async {
+        // ✅ FIX: Use injected _prefs synchronously — no async, no deadlock.
+        onRequest: (options, handler) {
           try {
-            final prefs = await SharedPreferences.getInstance();
-            final token = prefs.getString(accessTokenKey); // ✅ correct key
+            final token = _prefs.getString(accessTokenKey);
             if (token != null && token.isNotEmpty) {
               options.headers['Authorization'] = 'Bearer $token';
               print('🔐 Token attached: ${options.path}');
@@ -72,11 +81,10 @@ class ApiClient {
           handler.next(response);
         },
 
-        // ✅ On 401 — silently try to refresh the access token
+        // ✅ On 401 — attempt token refresh
         onError: (error, handler) async {
           print('❌ ${error.response?.statusCode} ${error.requestOptions.path}');
 
-          // Only attempt refresh on 401 and avoid infinite loop on /refresh itself
           if (error.response?.statusCode == 401 &&
               !error.requestOptions.path.contains('/refresh') &&
               !error.requestOptions.path.contains('/login') &&
@@ -87,13 +95,10 @@ class ApiClient {
             if (refreshed) {
               print('✅ Token refreshed — retrying original request...');
               try {
-                // Retry the original request with the new access token
-                final prefs = await SharedPreferences.getInstance();
-                final newToken = prefs.getString(accessTokenKey);
-
+                // ✅ Use _prefs synchronously for the retry token too
+                final newToken = _prefs.getString(accessTokenKey);
                 final retryOptions = error.requestOptions;
                 retryOptions.headers['Authorization'] = 'Bearer $newToken';
-
                 final retryResponse = await _dio.fetch(retryOptions);
                 return handler.resolve(retryResponse);
               } catch (retryError) {
@@ -101,9 +106,8 @@ class ApiClient {
                 return handler.next(error);
               }
             } else {
-              // ✅ Refresh failed — clear tokens, user must log in again
               print('❌ Token refresh failed — clearing session');
-              await _clearAllTokens();
+              _clearAllTokensSync();
               return handler.next(error);
             }
           }
@@ -118,28 +122,22 @@ class ApiClient {
 
   Future<bool> _tryRefreshToken() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final refreshToken = prefs.getString(refreshTokenKey);
+      final refreshToken = _prefs.getString(refreshTokenKey);
 
       if (refreshToken == null || refreshToken.isEmpty) {
         print('⚠️ No refresh token stored');
         return false;
       }
 
-      // Call /refresh directly via a plain Dio (bypasses this interceptor)
+      // Use a plain Dio (bypasses this interceptor) for refresh
       final refreshDio = Dio(
         BaseOptions(
-          baseUrl: baseUrl.contains('/auth') ? baseUrl : defaultAuthBaseUrl,
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
+          connectTimeout: const Duration(seconds: 20),
+          receiveTimeout: const Duration(seconds: 20),
         ),
       );
 
-      // Make sure we hit /api/auth/refresh regardless of current baseUrl
-      final refreshUrl =
-          defaultAuthBaseUrl.endsWith('/auth')
-              ? '$defaultAuthBaseUrl/refresh'
-              : '${defaultAuthBaseUrl.replaceAll(RegExp(r'/api.*'), '')}/api/auth/refresh';
+      final refreshUrl = '$defaultAuthBaseUrl/refresh';
 
       final response = await refreshDio.post(
         refreshUrl,
@@ -149,11 +147,12 @@ class ApiClient {
 
       if (response.statusCode == 200 && response.data['success'] == true) {
         final data = response.data['data'];
-
-        // ✅ Save new rotated token pair
-        await prefs.setString(accessTokenKey, data['access_token'] as String);
-        await prefs.setString(refreshTokenKey, data['refresh_token'] as String);
-
+        // ✅ Save new rotated token pair synchronously
+        await _prefs.setString(accessTokenKey, data['access_token'] as String);
+        await _prefs.setString(
+          refreshTokenKey,
+          data['refresh_token'] as String,
+        );
         print('✅ Token pair rotated and saved');
         return true;
       }
@@ -165,12 +164,12 @@ class ApiClient {
     }
   }
 
-  Future<void> _clearAllTokens() async {
+  // ✅ Synchronous clear — safe to call anywhere
+  void _clearAllTokensSync() {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(accessTokenKey);
-      await prefs.remove(refreshTokenKey);
-      await prefs.remove('user_data');
+      _prefs.remove(accessTokenKey);
+      _prefs.remove(refreshTokenKey);
+      _prefs.remove('user_data');
     } catch (e) {
       print('❌ Error clearing tokens: $e');
     }
@@ -178,45 +177,25 @@ class ApiClient {
 
   // ─── Token Management ────────────────────────────────────
 
-  Future<void> _loadAuthToken() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _authToken = prefs.getString(accessTokenKey);
-      print('🔵 Auth token: ${_authToken != null ? "present" : "absent"}');
-    } catch (e) {
-      print('❌ Error loading auth token: $e');
-    }
-  }
-
   Future<void> setAuthToken(String token) async {
-    _authToken = token;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(accessTokenKey, token);
-      print('✅ Access token saved');
-    } catch (e) {
-      print('❌ Error saving auth token: $e');
-    }
+    await _prefs.setString(accessTokenKey, token);
+    print('✅ Access token saved');
   }
 
   Future<void> setRefreshToken(String token) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(refreshTokenKey, token);
-      print('✅ Refresh token saved');
-    } catch (e) {
-      print('❌ Error saving refresh token: $e');
-    }
+    await _prefs.setString(refreshTokenKey, token);
+    print('✅ Refresh token saved');
   }
 
   Future<void> clearAuthToken() async {
-    await _clearAllTokens();
-    _authToken = null;
+    _clearAllTokensSync();
     print('✅ All tokens cleared');
   }
 
-  String? get authToken => _authToken;
-  bool get isAuthenticated => _authToken != null && _authToken!.isNotEmpty;
+  bool get isAuthenticated {
+    final token = _prefs.getString(accessTokenKey);
+    return token != null && token.isNotEmpty;
+  }
 
   // ─── HTTP Methods ────────────────────────────────────────
 

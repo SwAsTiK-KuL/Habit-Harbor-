@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,7 +22,6 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _contentController;
   late final AnimationController _exitController;
 
-  // Ripple rings
   late final Animation<double> _ring1Scale;
   late final Animation<double> _ring1Opacity;
   late final Animation<double> _ring2Scale;
@@ -29,22 +29,29 @@ class _SplashScreenState extends State<SplashScreen>
   late final Animation<double> _ring3Scale;
   late final Animation<double> _ring3Opacity;
 
-  // Logo
   late final Animation<double> _logoScale;
   late final Animation<double> _logoOpacity;
 
-  // Bottom content
   late final Animation<Offset> _nameSlide;
   late final Animation<double> _nameOpacity;
   late final Animation<double> _taglineOpacity;
 
-  // Exit
   late final Animation<double> _exitOpacity;
 
+  // ── Navigation state ────────────────────────────────────────────────────────
+
+  // Both conditions must be true before navigating:
+  // [1] _minDelayDone  — 2 seconds have passed
+  // [2] _authCheckDone — BLoC emitted a terminal state
+  bool _minDelayDone = false;
   bool _authCheckDone = false;
+  bool _isNavigating = false;
   String? _navigationTarget;
 
-  // ── Palette — matched to logo blues ─────────────────────────────────────────
+  Timer? _minDelayTimer;
+  Timer? _safetyTimer;
+
+  // ── Palette ─────────────────────────────────────────────────────────────────
 
   static const _bg = Color(0xFFF0F6FF);
   static const _blue = Color(0xFF1565C0);
@@ -52,16 +59,98 @@ class _SplashScreenState extends State<SplashScreen>
   static const _ink = Color(0xFF0D1B2A);
   static const _inkMid = Color(0xFF5A6A7A);
 
+  // ── Lifecycle ────────────────────────────────────────────────────────────────
+
   @override
   void initState() {
     super.initState();
     _setupAnimations();
-    _startSequence();
+    _contentController.forward();
     _triggerAuthCheck();
+    _startMinDelayTimer();
+    _startSafetyTimer();
   }
 
+  @override
+  void dispose() {
+    _minDelayTimer?.cancel();
+    _safetyTimer?.cancel();
+    _rippleController.dispose();
+    _contentController.dispose();
+    _exitController.dispose();
+    super.dispose();
+  }
+
+  // ── Timers ───────────────────────────────────────────────────────────────────
+
+  /// Minimum 2-second display time. After this fires we check if auth
+  /// is already done — if yes navigate immediately, otherwise wait for
+  /// the BLoC to emit its terminal state.
+  void _startMinDelayTimer() {
+    _minDelayTimer = Timer(const Duration(seconds: 2), () {
+      _minDelayDone = true;
+      debugPrint('⏱ SplashScreen: 2s minimum delay done');
+      _tryNavigate();
+    });
+  }
+
+  /// Hard fallback — if auth never resolves after 7s, force login.
+  void _startSafetyTimer() {
+    _safetyTimer = Timer(const Duration(seconds: 7), () {
+      if (!mounted || _isNavigating) return;
+      if (!_authCheckDone) {
+        debugPrint('⚠️ SplashScreen: Safety timer — forcing login');
+        _authCheckDone = true;
+        _navigationTarget = 'login';
+        _tryNavigate();
+      }
+    });
+  }
+
+  // ── Auth ─────────────────────────────────────────────────────────────────────
+
+  void _triggerAuthCheck() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        debugPrint('🔵 SplashScreen: Firing CheckAuthStatus');
+        context.read<AuthBloc>().add(CheckAuthStatus());
+      }
+    });
+  }
+
+  void _onAuthResolved(String target) {
+    if (_authCheckDone) return;
+    _authCheckDone = true;
+    _navigationTarget = target;
+    debugPrint('✅ SplashScreen: Auth resolved → $target');
+    _safetyTimer?.cancel();
+    _tryNavigate();
+  }
+
+  // ── Navigation ───────────────────────────────────────────────────────────────
+
+  /// Only navigates when BOTH the 2s delay is done AND auth has resolved.
+  void _tryNavigate() {
+    if (!_minDelayDone || !_authCheckDone) return;
+    if (_isNavigating) return;
+    if (!mounted) return;
+    _isNavigating = true;
+
+    debugPrint('🚀 SplashScreen: Navigating to /${_navigationTarget}');
+    _rippleController.stop();
+
+    // Play exit fade, then push the next route
+    _exitController.forward().then((_) {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacementNamed(
+        _navigationTarget == 'home' ? '/home' : '/login',
+      );
+    });
+  }
+
+  // ── Animations ───────────────────────────────────────────────────────────────
+
   void _setupAnimations() {
-    // ── Ripple (loops) ──────────────────────────────
     _rippleController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 3000),
@@ -104,7 +193,6 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    // ── Content reveal ───────────────────────────────
     _contentController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -122,7 +210,6 @@ class _SplashScreenState extends State<SplashScreen>
         curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
       ),
     );
-
     _nameSlide = Tween<Offset>(
       begin: const Offset(0, 0.5),
       end: Offset.zero,
@@ -145,54 +232,14 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    // ── Exit fade ────────────────────────────────────
+    // ✅ 600ms fade-out exit animation
     _exitController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 420),
+      duration: const Duration(milliseconds: 600),
     );
     _exitOpacity = Tween<double>(begin: 1.0, end: 0.0).animate(
       CurvedAnimation(parent: _exitController, curve: Curves.easeInCubic),
     );
-  }
-
-  Future<void> _startSequence() async {
-    await Future.delayed(const Duration(milliseconds: 250));
-    if (!mounted) return;
-    await _contentController.forward();
-  }
-
-  void _triggerAuthCheck() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AuthBloc>().add(CheckAuthStatus());
-    });
-  }
-
-  Future<void> _navigateWhenReady() async {
-    if (!_authCheckDone || _navigationTarget == null) return;
-
-    if (_contentController.value < 0.9) {
-      await _contentController.forward();
-    }
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-
-    _rippleController.stop();
-    await _exitController.forward();
-    if (!mounted) return;
-
-    if (_navigationTarget == 'home') {
-      Navigator.of(context).pushReplacementNamed('/home');
-    } else {
-      Navigator.of(context).pushReplacementNamed('/login');
-    }
-  }
-
-  @override
-  void dispose() {
-    _rippleController.dispose();
-    _contentController.dispose();
-    _exitController.dispose();
-    super.dispose();
   }
 
   // ── Build ────────────────────────────────────────────────────────────────────
@@ -209,14 +256,14 @@ class _SplashScreenState extends State<SplashScreen>
 
     return BlocListener<AuthBloc, AuthState>(
       listener: (context, state) {
+        debugPrint('🔵 SplashScreen: state = ${state.runtimeType}');
         if (state is AuthAuthenticated) {
-          _authCheckDone = true;
-          _navigationTarget = 'home';
-          _navigateWhenReady();
+          _onAuthResolved('home');
         } else if (state is AuthUnauthenticated) {
-          _authCheckDone = true;
-          _navigationTarget = 'login';
-          _navigateWhenReady();
+          _onAuthResolved('login');
+        } else if (state is AuthError) {
+          debugPrint('⚠️ SplashScreen: AuthError → ${state.message}');
+          _onAuthResolved('login');
         }
       },
       child: Scaffold(
@@ -233,26 +280,21 @@ class _SplashScreenState extends State<SplashScreen>
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // ── Radial gradient background ──────────────
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: RadialGradient(
-                          center: Alignment.center,
-                          radius: 1.2,
-                          colors: [
-                            Colors.white,
-                            _bg,
-                            _blueLight.withOpacity(0.12),
-                          ],
-                          stops: const [0.0, 0.55, 1.0],
-                        ),
+                  // ── Background gradient ─────────────────────
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: const Alignment(0, -0.3),
+                        radius: 1.1,
+                        colors: [_blueLight.withOpacity(0.12), _bg],
                       ),
                     ),
                   ),
 
                   // ── Grain texture ───────────────────────────
-                  Positioned.fill(child: CustomPaint(painter: _GrainPainter())),
+                  Positioned.fill(
+                    child: CustomPaint(painter: _GrainPainter()),
+                  ),
 
                   // ── Decorative corner arcs ──────────────────
                   Positioned(
@@ -266,7 +308,7 @@ class _SplashScreenState extends State<SplashScreen>
                     child: _buildCornerArc(280, _blueLight.withOpacity(0.06)),
                   ),
 
-                  // ── Logo centered vertically (slightly above center) ──
+                  // ── Logo ────────────────────────────────────
                   Align(
                     alignment: const Alignment(0, -0.18),
                     child: SizedBox(
@@ -275,29 +317,24 @@ class _SplashScreenState extends State<SplashScreen>
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // Ring 3 — outermost
                           _buildRippleRing(
                             scale: _ring3Scale.value,
                             opacity: _ring3Opacity.value,
                             size: 268,
                             strokeWidth: 1.0,
                           ),
-                          // Ring 2
                           _buildRippleRing(
                             scale: _ring2Scale.value,
                             opacity: _ring2Opacity.value,
                             size: 222,
                             strokeWidth: 1.3,
                           ),
-                          // Ring 1 — innermost
                           _buildRippleRing(
                             scale: _ring1Scale.value,
                             opacity: _ring1Opacity.value,
                             size: 176,
                             strokeWidth: 1.7,
                           ),
-
-                          // ── Logo image ──────────────────────
                           Opacity(
                             opacity: _logoOpacity.value,
                             child: Transform.scale(
@@ -317,7 +354,7 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                   ),
 
-                  // ── Bottom panel — name + tagline + version ──
+                  // ── Bottom panel ────────────────────────────
                   Positioned(
                     bottom: 0,
                     left: 0,
@@ -339,7 +376,6 @@ class _SplashScreenState extends State<SplashScreen>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // App name
                           FadeTransition(
                             opacity: _nameOpacity,
                             child: SlideTransition(
@@ -373,10 +409,7 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                             ),
                           ),
-
                           const SizedBox(height: 12),
-
-                          // Tagline
                           FadeTransition(
                             opacity: _taglineOpacity,
                             child: Text(
@@ -391,10 +424,7 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                             ),
                           ),
-
                           const SizedBox(height: 22),
-
-                          // Version
                           FadeTransition(
                             opacity: _nameOpacity,
                             child: Text(
@@ -463,10 +493,9 @@ class _GrainPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = Colors.black.withOpacity(0.014)
-          ..style = PaintingStyle.fill;
+    final paint = Paint()
+      ..color = Colors.black.withOpacity(0.014)
+      ..style = PaintingStyle.fill;
 
     for (int i = 0; i < 500; i++) {
       final dx = _rng.nextDouble() * size.width;

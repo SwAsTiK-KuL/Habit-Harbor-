@@ -9,6 +9,7 @@ import '../../core/widgets/custom_text_field.dart';
 import '../../core/widgets/loading_overlay.dart';
 import '../../domain/entities/auth_request.dart';
 
+import 'home_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -46,10 +47,11 @@ class _LoginScreenState extends State<LoginScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => BlocProvider.value(
-          value: GetIt.instance<AuthBloc>(),
-          child: const RegisterScreen(),
-        ),
+        builder:
+            (context) => BlocProvider.value(
+              value: GetIt.instance<AuthBloc>(),
+              child: const RegisterScreen(),
+            ),
       ),
     );
   }
@@ -68,6 +70,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 backgroundColor: Colors.red,
               ),
             );
+          } else if (state is AuthAuthenticated) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(
+                builder: (context) => HomeScreen(user: state.user),
+              ),
+              (route) => false,
+            );
           }
         },
         builder: (context, state) {
@@ -85,8 +94,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    minHeight: MediaQuery.of(context).size.height -
-                        MediaQuery.of(context).padding.top - 48,
+                    minHeight:
+                        MediaQuery.of(context).size.height -
+                        MediaQuery.of(context).padding.top -
+                        48,
                   ),
                   child: IntrinsicHeight(
                     child: Form(
@@ -108,10 +119,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text(
                             'Welcome Back',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineMedium
-                                ?.copyWith(
+                            style: Theme.of(
+                              context,
+                            ).textTheme.headlineMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: Colors.blue[800],
                             ),
@@ -120,12 +130,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text(
                             'Sign in to your account',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyLarge
-                                ?.copyWith(
-                              color: Colors.grey[600],
-                            ),
+                            style: Theme.of(context).textTheme.bodyLarge
+                                ?.copyWith(color: Colors.grey[600]),
                           ),
                           const SizedBox(height: 48),
 

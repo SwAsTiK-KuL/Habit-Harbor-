@@ -6,6 +6,7 @@ import '../../application/auth/auth_state.dart';
 import '../../core/widgets/custom_button.dart';
 import '../../core/widgets/user_profile_card.dart';
 import '../../domain/entities/user.dart';
+import 'login_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final User user;
@@ -43,7 +44,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB), // soft app background
+      backgroundColor: const Color(0xFFF5F7FB),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
@@ -52,6 +53,11 @@ class ProfileScreen extends StatelessWidget {
                 content: Text(state.message),
                 backgroundColor: Colors.red,
               ),
+            );
+          } else if (state is AuthUnauthenticated) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (route) => false,
             );
           }
         },

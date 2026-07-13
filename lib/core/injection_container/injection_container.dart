@@ -38,134 +38,28 @@ Future<void> initializeDependencies() async {
 
   // ─── External ───────────────────────────────────────────
   final sharedPreferences = await SharedPreferences.getInstance();
-  sl.registerLazySingleton(() => sharedPreferences);
+  sl.registerLazySingleton<SharedPreferences>(() => sharedPreferences);
   print('✅ SharedPreferences registered');
 
-  // ─── Production URLs ────────────────────────────────────
-  // const String baseUrl = 'https://habit-harbor-backend-deploy.vercel.app';
-  const String baseUrl = 'http://10.0.2.2:3000/api/auth/';
-
-  const String authApiUrl = '$baseUrl/api/auth';
-  const String goalsApiUrl =
-      '$baseUrl/api'; // ✅ Fixed: was 'http://$baseUrl:$port/api'
-
-  print('🔍 Using server: $baseUrl');
-
-  // ─── Auth Dio ───────────────────────────────────────────
-  final authDio = Dio(
-    BaseOptions(
-      baseUrl: authApiUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
-      sendTimeout: const Duration(seconds: 10),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      followRedirects: true,
-      maxRedirects: 3,
-    ),
-  );
-
-  authDio.interceptors.add(
-    LogInterceptor(
-      requestBody: true,
-      responseBody: true,
-      requestHeader: true,
-      responseHeader: true,
-      logPrint: (obj) => print('🔵 Auth API: $obj'),
-    ),
-  );
-
-  authDio.interceptors.add(
-    InterceptorsWrapper(
-      onError: (error, handler) {
-        print(
-          '❌ Auth API Error: ${error.response?.statusCode} ${error.message}',
-        );
-        handler.next(error);
-      },
-    ),
-  );
-
-  sl.registerLazySingleton(() => authDio);
-  print('✅ Auth Dio registered');
-
-  // ─── Goals Dio ──────────────────────────────────────────
-  final goalsDio = Dio(
-    BaseOptions(
-      baseUrl: goalsApiUrl, // ✅ Fixed URL
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
-      sendTimeout: const Duration(seconds: 10),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      followRedirects: true,
-      maxRedirects: 3,
-    ),
-  );
-
-  goalsDio.interceptors.add(
-    LogInterceptor(
-      requestBody: true,
-      responseBody: true,
-      logPrint: (obj) => print('🎯 Goals API: $obj'),
-    ),
-  );
-
-  goalsDio.interceptors.add(
-    InterceptorsWrapper(
-      onRequest: (options, handler) async {
-        try {
-          final storageService = sl<StorageService>();
-          final token = await storageService.getToken(); // ✅ reads access_token
-          if (token != null && token.isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $token';
-            print('🔐 Auth token added to Goals API request');
-          } else {
-            print('⚠️ No auth token for Goals API request');
-          }
-        } catch (e) {
-          print('❌ Error getting token for Goals API: $e');
-        }
-        handler.next(options);
-      },
-      onError: (error, handler) {
-        print(
-          '❌ Goals API Error: ${error.response?.statusCode} - ${error.message}',
-        );
-        handler.next(error);
-      },
-    ),
-  );
-
-  sl.registerLazySingleton(() => goalsDio, instanceName: 'goalsDio');
-  print('✅ Goals Dio registered');
-
   // ─── Core Services ──────────────────────────────────────
-  sl.registerLazySingleton<StorageService>(() => StorageService(sl()));
+  // ✅ Register StorageService BEFORE ApiClient so it's available
+  sl.registerLazySingleton<StorageService>(
+    () => StorageService(sl<SharedPreferences>()),
+  );
   print('✅ StorageService registered');
 
-  // ─── Connectivity Test ──────────────────────────────────
-  try {
-    final testResponse = await authDio.get(
-      '/health',
-      options: Options(
-        sendTimeout: const Duration(seconds: 5),
-        receiveTimeout: const Duration(seconds: 5),
-      ),
-    );
-    print('✅ Server connection OK: ${testResponse.data}');
-  } catch (e) {
-    print('⚠️ Server connectivity check failed: $e');
-  }
-
   // ─── ApiClient Instances ────────────────────────────────
-  sl.registerLazySingleton<ApiClient>(() => ApiClient.forAuth());
+  // ✅ FIX: Pass the already-initialized SharedPreferences instance
+  // directly into ApiClient. Previously ApiClient was calling
+  // SharedPreferences.getInstance() inside the Dio request interceptor
+  // on every network call, which caused a deadlock in release mode —
+  // the interceptor hung waiting for getInstance() and the verify token
+  // request never completed, leaving AuthBloc stuck on AuthLoading forever.
   sl.registerLazySingleton<ApiClient>(
-    () => ApiClient.forGoals(),
+    () => ApiClient.forAuth(prefs: sl<SharedPreferences>()),
+  );
+  sl.registerLazySingleton<ApiClient>(
+    () => ApiClient.forGoals(prefs: sl<SharedPreferences>()),
     instanceName: 'goalsApiClient',
   );
   print('✅ ApiClient instances registered');
@@ -233,7 +127,6 @@ Future<void> initializeDependencies() async {
       removeFcmTokenUseCase: sl(),
     ),
   );
-
   sl.registerFactory(
     () => GoalBloc(
       getAllGoalsUseCase: sl(),

@@ -64,36 +64,61 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /// ✅ FIX: Wrapped in try-catch.
+  /// Without this, any exception thrown inside verifyTokenUseCase()
+  /// (network error, Dio timeout, SSL issue, etc.) causes the BLoC
+  /// handler to crash after emitting AuthLoading — no further state
+  /// is ever emitted — leaving the splash screen frozen forever in
+  /// release mode.
   Future<void> _onCheckAuthStatus(
     CheckAuthStatus event,
     Emitter<AuthState> emit,
   ) async {
-    emit(AuthLoading());
+    try {
+      emit(AuthLoading());
+      print('🔵 AuthBloc: Checking auth status...');
 
-    final result = await verifyTokenUseCase();
-    result.fold(
-      (failure) => emit(AuthUnauthenticated()),
-      (user) => emit(AuthAuthenticated(user)),
-    );
+      final result = await verifyTokenUseCase();
+
+      result.fold(
+        (failure) {
+          print('🔵 AuthBloc: Token invalid → Unauthenticated');
+          emit(AuthUnauthenticated());
+        },
+        (user) {
+          print('✅ AuthBloc: Token valid → Authenticated');
+          emit(AuthAuthenticated(user));
+        },
+      );
+    } catch (e, st) {
+      // ✅ This is the critical catch — in release mode any uncaught
+      // exception here previously left state stuck on AuthLoading.
+      print('❌ AuthBloc: _onCheckAuthStatus exception: $e');
+      print('❌ AuthBloc: StackTrace: $st');
+      emit(AuthUnauthenticated());
+    }
   }
 
   Future<void> _onLoginRequested(
     LoginRequested event,
     Emitter<AuthState> emit,
   ) async {
-    emit(AuthLoading());
+    try {
+      emit(AuthLoading());
 
-    final result = await loginUseCase(event.request);
+      final result = await loginUseCase(event.request);
 
-    // ✅ Emit FIRST inside fold (no async inside fold)
-    result.fold(
-      (failure) => emit(AuthError(_mapFailureToMessage(failure))),
-      (authResponse) => emit(AuthAuthenticated(authResponse.user)),
-    );
+      result.fold(
+        (failure) => emit(AuthError(_mapFailureToMessage(failure))),
+        (authResponse) => emit(AuthAuthenticated(authResponse.user)),
+      );
 
-    // ✅ Await FCM AFTER fold+emit, only if login succeeded
-    if (result.isRight()) {
-      await _registerFcmToken();
+      if (result.isRight()) {
+        await _registerFcmToken();
+      }
+    } catch (e) {
+      print('❌ AuthBloc: _onLoginRequested exception: $e');
+      emit(AuthError('Login failed. Please try again.'));
     }
   }
 
@@ -101,22 +126,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     RegisterRequested event,
     Emitter<AuthState> emit,
   ) async {
-    emit(AuthLoading());
+    try {
+      emit(AuthLoading());
 
-    final result = await registerUseCase(event.request);
+      final result = await registerUseCase(event.request);
 
-    // ✅ Emit FIRST inside fold (no async inside fold)
-    result.fold((failure) {
-      if (failure is ValidationFailure) {
-        emit(AuthError(failure.message));
-      } else {
-        emit(AuthError(_mapFailureToMessage(failure)));
+      result.fold((failure) {
+        if (failure is ValidationFailure) {
+          emit(AuthError(failure.message));
+        } else {
+          emit(AuthError(_mapFailureToMessage(failure)));
+        }
+      }, (authResponse) => emit(AuthAuthenticated(authResponse.user)));
+
+      if (result.isRight()) {
+        await _registerFcmToken();
       }
-    }, (authResponse) => emit(AuthAuthenticated(authResponse.user)));
-
-    // ✅ Await FCM AFTER fold+emit, only if register succeeded
-    if (result.isRight()) {
-      await _registerFcmToken();
+    } catch (e) {
+      print('❌ AuthBloc: _onRegisterRequested exception: $e');
+      emit(AuthError('Registration failed. Please try again.'));
     }
   }
 
@@ -124,28 +152,38 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     LogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
-    emit(AuthLoading());
+    try {
+      emit(AuthLoading());
+      await _removeFcmToken();
 
-    await _removeFcmToken();
-
-    final result = await logoutUseCase();
-    result.fold(
-      (failure) => emit(AuthError(_mapFailureToMessage(failure))),
-      (_) => emit(AuthUnauthenticated()),
-    );
+      final result = await logoutUseCase();
+      result.fold(
+        (failure) => emit(AuthError(_mapFailureToMessage(failure))),
+        (_) => emit(AuthUnauthenticated()),
+      );
+    } catch (e) {
+      print('❌ AuthBloc: _onLogoutRequested exception: $e');
+      // Force unauthenticated even if logout API fails
+      emit(AuthUnauthenticated());
+    }
   }
 
   Future<void> _onGetProfileRequested(
     GetProfileRequested event,
     Emitter<AuthState> emit,
   ) async {
-    emit(AuthLoading());
+    try {
+      emit(AuthLoading());
 
-    final result = await getProfileUseCase();
-    result.fold(
-      (failure) => emit(AuthError(_mapFailureToMessage(failure))),
-      (user) => emit(AuthAuthenticated(user)),
-    );
+      final result = await getProfileUseCase();
+      result.fold(
+        (failure) => emit(AuthError(_mapFailureToMessage(failure))),
+        (user) => emit(AuthAuthenticated(user)),
+      );
+    } catch (e) {
+      print('❌ AuthBloc: _onGetProfileRequested exception: $e');
+      emit(AuthError('Failed to load profile.'));
+    }
   }
 
   void _onAuthErrorCleared(AuthErrorCleared event, Emitter<AuthState> emit) {
@@ -153,17 +191,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   String _mapFailureToMessage(Failure failure) {
-    switch (failure.runtimeType) {
-      case ServerFailure:
-        return failure.message;
-      case CacheFailure:
-        return failure.message;
-      case NetworkFailure:
-        return failure.message;
-      case ValidationFailure:
-        return failure.message;
-      default:
-        return 'An unexpected error occurred';
-    }
+    if (failure is ServerFailure) return failure.message;
+    if (failure is CacheFailure) return failure.message;
+    if (failure is NetworkFailure) return failure.message;
+    if (failure is ValidationFailure) return failure.message;
+    return 'An unexpected error occurred';
   }
 }

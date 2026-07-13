@@ -3,10 +3,10 @@ class Assets {
   Assets._();
 
   static const String imagesSplashImage = 'assets/images/splash_image.png';
-  static const String interInterItalicVariableFontOpsz,
-      wght = 'assets/fonts/Inter/Inter-Italic-VariableFont_opsz,wght.ttf';
-  static const String interInterVariableFontOpsz,
-      wght = 'assets/fonts/Inter/Inter-VariableFont_opsz,wght.ttf';
+  // static const String interInterItalicVariableFontOpsz,
+  //     wght = 'assets/fonts/Inter/Inter-Italic-VariableFont_opsz,wght.ttf';
+  // static const String interInterVariableFontOpsz,
+  //     wght = 'assets/fonts/Inter/Inter-VariableFont_opsz,wght.ttf';
   static const String interOFL = 'assets/fonts/Inter/OFL.txt';
   static const String interREADME = 'assets/fonts/Inter/README.txt';
   static const String logoHabitHarborLogo = 'assets/logo/habit_harbor_logo.png';

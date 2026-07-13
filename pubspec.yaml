@@ -118,8 +118,8 @@ flutter:
           weight: 700
 
 
-flutter_launcher_icons:
-  android: "launcher_icon"
-  ios: true
-  image_path: "assets/logo/habit_harbor_logo.png"
-  min_sdk_android: 21
+#flutter_launcher_icons:
+#  android: "launcher_icon"
+#  ios: true
+#  image_path: "assets/logo/habit_harbor_logo.png"
+#  min_sdk_android: 21
