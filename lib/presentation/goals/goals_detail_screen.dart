@@ -16,6 +16,7 @@ class GoalDetailsScreen extends StatefulWidget {
 }
 
 class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
+  static const Color kAccent = Color(0xFF5B3DF5);
   int _selectedDays = 30;
 
   @override
@@ -105,7 +106,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
     try {
       return Color(int.parse(hexColor.replaceFirst('#', '0xff')));
     } catch (e) {
-      return Colors.deepPurple;
+      return kAccent;
     }
   }
 
@@ -132,144 +133,185 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
     }
   }
 
+  Widget _flatCard({required Widget child, EdgeInsetsGeometry? padding}) {
+    return Container(
+      width: double.infinity,
+      padding: padding ?? const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+      ),
+      child: child,
+    );
+  }
+
   Widget _buildStatsCard(BuildContext context, GoalStats stats) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Statistics',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                DropdownButton<int>(
-                  value: _selectedDays,
-                  items: const [
-                    DropdownMenuItem(value: 7, child: Text('7 days')),
-                    DropdownMenuItem(value: 30, child: Text('30 days')),
-                    DropdownMenuItem(value: 90, child: Text('90 days')),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedDays = value!;
-                    });
-                    _loadStats();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Completion Rate
-            Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          '${stats.completionRate}%',
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green,
-                          ),
-                        ),
-                        const Text('Completion Rate'),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.orange[50],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          '${stats.currentStreak}',
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.orange,
-                          ),
-                        ),
-                        const Text('Current Streak'),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Detailed Stats
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatItem(
-                    'Completed',
-                    stats.completed,
-                    Colors.green,
-                  ),
-                ),
-                Expanded(
-                  child: _buildStatItem('Missed', stats.missed, Colors.red),
-                ),
-                Expanded(
-                  child: _buildStatItem('Holiday', stats.holiday, Colors.blue),
-                ),
-                Expanded(
-                  child: _buildStatItem('Sick', stats.sick, Colors.orange),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Longest Streak
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.purple[50],
-                borderRadius: BorderRadius.circular(8),
+    return _flatCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Statistics',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
               ),
-              child: Column(
-                children: [
-                  Text(
-                    '${stats.longestStreak}',
-                    style: const TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.purple,
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 2,
+                ),
+                decoration: BoxDecoration(
+                  color: kAccent.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: _selectedDays,
+                    icon: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: kAccent,
+                      size: 18,
                     ),
+                    style: TextStyle(
+                      color: kAccent,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 7, child: Text('7 days')),
+                      DropdownMenuItem(value: 30, child: Text('30 days')),
+                      DropdownMenuItem(value: 90, child: Text('90 days')),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedDays = value!;
+                      });
+                      _loadStats();
+                    },
                   ),
-                  const Text(
-                    'Longest Streak',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  Text(
-                    'days in a row',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  ),
-                ],
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Completion Rate / Current Streak
+          Row(
+            children: [
+              Expanded(
+                child: _buildHighlightTile(
+                  '${stats.completionRate}%',
+                  'Completion Rate',
+                  const Color(0xFFDFF5E1),
+                  const Color(0xFF34C759),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildHighlightTile(
+                  '${stats.currentStreak}',
+                  'Current Streak',
+                  const Color(0xFFFCE8D6),
+                  const Color(0xFFFF9F0A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Detailed Stats
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatItem(
+                  'Completed',
+                  stats.completed,
+                  const Color(0xFF34C759),
+                ),
+              ),
+              Expanded(
+                child: _buildStatItem(
+                  'Missed',
+                  stats.missed,
+                  const Color(0xFFFF3B30),
+                ),
+              ),
+              Expanded(
+                child: _buildStatItem(
+                  'Holiday',
+                  stats.holiday,
+                  const Color(0xFF0A84FF),
+                ),
+              ),
+              Expanded(
+                child: _buildStatItem(
+                  'Sick',
+                  stats.sick,
+                  const Color(0xFFFF9F0A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Longest Streak
+          _buildHighlightTile(
+            '${stats.longestStreak}',
+            'Longest Streak',
+            const Color(0xFFEDE9FE),
+            const Color(0xFF7C3AED),
+            large: true,
+            subLabel: 'days in a row',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHighlightTile(
+    String value,
+    String label,
+    Color bg,
+    Color fg, {
+    bool large = false,
+    String? subLabel,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(vertical: large ? 18 : 14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: large ? 30 : 22,
+              fontWeight: FontWeight.bold,
+              color: fg,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: large ? 14 : 12,
+              fontWeight: FontWeight.w600,
+              color: fg.withOpacity(0.85),
+            ),
+          ),
+          if (subLabel != null)
+            Text(
+              subLabel,
+              style: TextStyle(color: fg.withOpacity(0.6), fontSize: 11),
+            ),
+        ],
       ),
     );
   }
@@ -280,14 +322,15 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
         Text(
           value.toString(),
           style: TextStyle(
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: FontWeight.bold,
             color: color,
           ),
         ),
+        const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(fontSize: 12),
+          style: TextStyle(fontSize: 11, color: Colors.grey[600]),
           textAlign: TextAlign.center,
         ),
       ],
@@ -299,14 +342,27 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
     final goalColor = _getColorFromHex(widget.goal.color);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F3FB),
       appBar: AppBar(
-        title: Text(widget.goal.title),
+        backgroundColor: const Color(0xFFF5F3FB),
         elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.black87),
+        title: Text(
+          widget.goal.title,
+          style: const TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
         actions: [
           PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: Colors.black87),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
             onSelected: (value) {
               if (value == 'edit') {
-                // TODO: Navigate to edit goal screen
                 _showClassicSnackbar(
                   context,
                   title: 'Coming Soon',
@@ -320,13 +376,13 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
             },
             itemBuilder:
                 (BuildContext context) => [
-                  const PopupMenuItem<String>(
+                  PopupMenuItem<String>(
                     value: 'edit',
                     child: Row(
                       children: [
-                        Icon(Icons.edit),
-                        SizedBox(width: 8),
-                        Text('Edit'),
+                        Icon(Icons.edit_outlined, color: kAccent, size: 20),
+                        const SizedBox(width: 10),
+                        const Text('Edit'),
                       ],
                     ),
                   ),
@@ -334,8 +390,12 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
                     value: 'delete',
                     child: Row(
                       children: [
-                        Icon(Icons.delete, color: Colors.red),
-                        SizedBox(width: 8),
+                        Icon(
+                          Icons.delete_outline_rounded,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                        SizedBox(width: 10),
                         Text('Delete', style: TextStyle(color: Colors.red)),
                       ],
                     ),
@@ -346,163 +406,155 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Goal Info Card
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    children: [
-                      // Goal Icon
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: goalColor.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Icon(
-                          _getGoalIcon(widget.goal.icon),
-                          color: goalColor,
-                          size: 40,
-                        ),
+              // ── Goal Info Card ──
+              _flatCard(
+                child: Column(
+                  children: [
+                    Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        color: goalColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                      const SizedBox(height: 16),
-
-                      // Goal Title
+                      child: Icon(
+                        _getGoalIcon(widget.goal.icon),
+                        color: goalColor,
+                        size: 36,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      widget.goal.title,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (widget.goal.description.isNotEmpty) ...[
+                      const SizedBox(height: 6),
                       Text(
-                        widget.goal.title,
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        widget.goal.description,
+                        style: TextStyle(fontSize: 14, color: Colors.grey[500]),
                         textAlign: TextAlign.center,
                       ),
-
-                      if (widget.goal.description.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          widget.goal.description,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
-                          textAlign: TextAlign.center,
+                    ],
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildDetailItem(
+                          'Category',
+                          widget.goal.category,
+                          Icons.category_outlined,
+                        ),
+                        _buildDetailItem(
+                          'Frequency',
+                          widget.goal.targetFrequency,
+                          Icons.repeat_rounded,
+                        ),
+                        _buildDetailItem(
+                          'Target',
+                          '${widget.goal.targetCount}x',
+                          Icons.flag_outlined,
                         ),
                       ],
-
-                      const SizedBox(height: 16),
-
-                      // Goal Details
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildDetailItem(
-                            'Category',
-                            widget.goal.category,
-                            Icons.category,
-                          ),
-                          _buildDetailItem(
-                            'Frequency',
-                            '${widget.goal.targetFrequency}',
-                            Icons.repeat,
-                          ),
-                          _buildDetailItem(
-                            'Target',
-                            '${widget.goal.targetCount}x',
-                            Icons.flag,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
-              // Statistics Section
+              // ── Statistics Section ──
               BlocBuilder<GoalBloc, GoalState>(
                 builder: (context, state) {
                   if (state is GoalStatsLoaded &&
                       state.goalId == widget.goal.id) {
                     return _buildStatsCard(context, state.stats);
                   } else if (state is GoalError) {
-                    return Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32.0),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              size: 48,
-                              color: Colors.red[400],
+                    return _flatCard(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 44,
+                            color: Colors.red[400],
+                          ),
+                          const SizedBox(height: 14),
+                          Text(
+                            'Failed to load statistics',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red[600],
                             ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Failed to load statistics',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(color: Colors.red[600]),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            state.message,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 14),
+                          ElevatedButton(
+                            onPressed: _loadStats,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: kAccent,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              state.message,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.grey[600]),
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: _loadStats,
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
+                            child: const Text('Retry'),
+                          ),
+                        ],
                       ),
                     );
                   }
 
-                  // Loading state
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32.0),
-                      child: Column(
-                        children: [
-                          const CircularProgressIndicator(),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Loading statistics...',
-                            style: Theme.of(context).textTheme.bodyLarge
-                                ?.copyWith(color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
+                  return _flatCard(
+                    padding: const EdgeInsets.all(28),
+                    child: Column(
+                      children: [
+                        const CircularProgressIndicator(color: kAccent),
+                        const SizedBox(height: 14),
+                        Text(
+                          'Loading statistics...',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ],
                     ),
                   );
                 },
               ),
+              const SizedBox(height: 14),
 
-              const SizedBox(height: 16),
-
-              // Quick Actions
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Quick Actions',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+              // ── Quick Actions ──
+              _flatCard(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Quick Actions',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
                             child: ElevatedButton.icon(
                               onPressed: () {
                                 context.read<GoalBloc>().add(
@@ -512,16 +564,23 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
                                   ),
                                 );
                               },
-                              icon: const Icon(Icons.check),
+                              icon: const Icon(Icons.check_rounded, size: 18),
                               label: const Text('Mark Complete'),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
+                                backgroundColor: const Color(0xFF34C759),
                                 foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
                             child: ElevatedButton.icon(
                               onPressed: () {
                                 context.read<GoalBloc>().add(
@@ -531,18 +590,22 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
                                   ),
                                 );
                               },
-                              icon: const Icon(Icons.close),
+                              icon: const Icon(Icons.close_rounded, size: 18),
                               label: const Text('Mark Missed'),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.red,
+                                backgroundColor: const Color(0xFFFF3B30),
                                 foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -555,13 +618,13 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
   Widget _buildDetailItem(String label, String value, IconData icon) {
     return Column(
       children: [
-        Icon(icon, size: 20, color: Colors.grey[600]),
-        const SizedBox(height: 4),
+        Icon(icon, size: 18, color: kAccent),
+        const SizedBox(height: 6),
         Text(
           value,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
         ),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[500])),
       ],
     );
   }
@@ -571,6 +634,9 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       context: context,
       builder:
           (dialogContext) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: const Text('Delete Goal'),
             content: Text(
               'Are you sure you want to delete "${widget.goal.title}"? This action cannot be undone.',
@@ -586,7 +652,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
                   context.read<GoalBloc>().add(
                     DeleteGoal(goalId: widget.goal.id),
                   );
-                  Navigator.pop(context); // Go back to goals list
+                  Navigator.pop(context);
                 },
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
                 child: const Text('Delete'),

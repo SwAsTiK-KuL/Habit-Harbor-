@@ -7,6 +7,7 @@ import '../../infrastucture/models/goals/goal.dart';
 
 class AllHabitsScreen extends StatelessWidget {
   final List<Goal> goals;
+  static const Color kAccent = Color(0xFF5B3DF5);
 
   const AllHabitsScreen({super.key, required this.goals});
 
@@ -144,7 +145,20 @@ class AllHabitsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('All Habits'), elevation: 0),
+      backgroundColor: const Color(0xFFF5F3FB),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF5F3FB),
+        elevation: 0,
+        title: const Text(
+          'All Habits',
+          style: TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        iconTheme: const IconThemeData(color: Colors.black87),
+      ),
       body: BlocConsumer<GoalBloc, GoalState>(
         buildWhen: (previous, current) => current is! GoalLoading,
         listener: (context, state) {
@@ -195,29 +209,30 @@ class AllHabitsScreen extends StatelessWidget {
 
           return Column(
             children: [
+              // ── Summary strip: count + trending icon, matches app's pill/card language ──
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(16, 14, 20, 14),
+                margin: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    left: BorderSide(color: Colors.green[500]!, width: 4),
-                    bottom: BorderSide(color: Colors.grey[100]!, width: 1),
-                  ),
+                  color: kAccent.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.trending_up, color: Colors.green[600], size: 18),
-                    const SizedBox(width: 8),
+                    Icon(Icons.trending_up_rounded, color: kAccent, size: 20),
+                    const SizedBox(width: 10),
                     Text(
                       currentGoals.length == 1
                           ? '1 habit in progress'
                           : '${currentGoals.length} habits in progress',
-                      style: const TextStyle(
-                        color: Colors.black87,
+                      style: TextStyle(
+                        color: kAccent,
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
-                        letterSpacing: 0.1,
                       ),
                     ),
                   ],
@@ -225,35 +240,38 @@ class AllHabitsScreen extends StatelessWidget {
               ),
               Expanded(
                 child: ListView.separated(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                   itemCount: currentGoals.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
                     final goal = currentGoals[index];
 
-                    Color goalColor = Colors.deepPurple;
+                    Color goalColor = kAccent;
                     try {
                       goalColor = Color(
                         int.parse(goal.color.replaceFirst('#', '0xff')),
                       );
                     } catch (_) {}
 
-                    return Card(
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.black.withOpacity(0.05),
+                        ),
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
+                          horizontal: 14,
+                          vertical: 6,
                         ),
                         leading: Container(
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: goalColor.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(10),
+                            color: goalColor.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
                             _getGoalIcon(goal.icon),
@@ -264,58 +282,59 @@ class AllHabitsScreen extends StatelessWidget {
                         title: Text(
                           goal.title,
                           style: const TextStyle(
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                             fontSize: 15,
                           ),
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
                             Row(
                               children: [
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
+                                    horizontal: 8,
+                                    vertical: 3,
                                   ),
                                   decoration: BoxDecoration(
                                     color: goalColor.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
                                     goal.category,
                                     style: TextStyle(
                                       color: goalColor,
                                       fontSize: 11,
-                                      fontWeight: FontWeight.w500,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 8),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
+                                    horizontal: 8,
+                                    vertical: 3,
                                   ),
                                   decoration: BoxDecoration(
                                     color: Colors.grey[100],
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
                                     goal.targetCount == 1
                                         ? goal.targetFrequency
                                         : '${goal.targetCount}x ${goal.targetFrequency}',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 11,
-                                      fontWeight: FontWeight.w500,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[600],
                                     ),
                                   ),
                                 ),
                               ],
                             ),
                             if (goal.description.isNotEmpty) ...[
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 5),
                               Text(
                                 goal.description,
                                 style: TextStyle(
@@ -330,7 +349,7 @@ class AllHabitsScreen extends StatelessWidget {
                         ),
                         trailing: IconButton(
                           icon: const Icon(
-                            Icons.delete_outline,
+                            Icons.delete_outline_rounded,
                             color: Colors.red,
                           ),
                           onPressed: () => _confirmDelete(context, goal),

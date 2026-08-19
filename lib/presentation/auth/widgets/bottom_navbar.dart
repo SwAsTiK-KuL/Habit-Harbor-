@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:habit_harbor/presentation/auth/home_screen.dart';
 
+import '../../../application/goal/goal_bloc.dart';
 import '../../../domain/entities/user.dart';
 import '../profile_screen.dart';
+import '../../goals/history_details_screen.dart';
 
 class BottomNavbar extends StatefulWidget {
   final User user;
@@ -14,17 +17,25 @@ class BottomNavbar extends StatefulWidget {
 }
 
 class _BottomNavbarState extends State<BottomNavbar> {
+  static const Color kAccent = Color(0xFF5B3DF5);
   int _currentIndex = 0;
+
+  // ✅ Built once, not rebuilt on every tab switch — IndexedStack keeps
+  // each screen's State alive (so HomeScreen's cached goals, History's
+  // loaded analytics, etc. all survive switching tabs and coming back).
+  late final List<Widget> _screens = [
+    HomeScreen(user: widget.user),
+    BlocProvider.value(
+      value: context.read<GoalBloc>(),
+      child: const HistoryDetailsScreen(),
+    ),
+    ProfileScreen(user: widget.user),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> screens = [
-      HomeScreen(user: widget.user), // Simple "This is HomeScreen"
-      ProfileScreen(user: widget.user), // Your detailed profile screen
-    ];
-
     return Scaffold(
-      body: screens[_currentIndex],
+      body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
@@ -33,17 +44,33 @@ class _BottomNavbarState extends State<BottomNavbar> {
           });
         },
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.deepPurple[600],
-        unselectedItemColor: Colors.grey[600],
+        backgroundColor: Colors.white,
+        selectedItemColor: kAccent,
+        unselectedItemColor: Colors.grey[500],
+        showUnselectedLabels: true,
+        selectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.w500,
+          fontSize: 12,
+        ),
+        elevation: 8,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
+            activeIcon: Icon(Icons.home_rounded),
             label: 'Home',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart_outlined),
+            activeIcon: Icon(Icons.bar_chart_rounded),
+            label: 'History',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
+            activeIcon: Icon(Icons.person_rounded),
             label: 'Profile',
           ),
         ],

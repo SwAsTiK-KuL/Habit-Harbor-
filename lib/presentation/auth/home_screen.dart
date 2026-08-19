@@ -23,18 +23,21 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const Color kAccent = Color(0xFF5B3DF5);
+  int _navIndex = 0;
+
+  List<Goal> _cachedGoals = [];
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final currentState = context.read<GoalBloc>().state;
-
-      if (currentState is! GoalsLoaded &&
-          currentState is! GoalLogged &&
-          currentState is! GoalCreated &&
-          currentState is! GoalActionLoading) {
-        context.read<GoalBloc>().add(const LoadGoals());
+      final goals = _getGoalsFromState(currentState);
+      if (goals.isNotEmpty) {
+        setState(() => _cachedGoals = goals);
       }
+      context.read<GoalBloc>().add(const LoadGoals());
     });
   }
 
@@ -175,8 +178,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ── Redesigned status picker matching mockup: header + 2-row icon grid ──
   void _showStatusDialog(BuildContext context, Goal goal) {
-    Color goalColor = Colors.blue;
+    Color goalColor = kAccent;
     try {
       goalColor = Color(int.parse(goal.color.replaceFirst('#', '0xff')));
     } catch (e) {}
@@ -188,23 +192,206 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (dialogContext) {
         return Container(
           decoration: const BoxDecoration(
-            color: Color(0xFFF2F2F7),
+            color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 40,
                 height: 4,
-                margin: const EdgeInsets.only(bottom: 24),
+                margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
                   color: Colors.black12,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: goalColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      _getGoalIcon(goal.icon),
+                      color: goalColor,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          goal.title,
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          "Log today's status",
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    icon: Icon(Icons.close_rounded, color: Colors.grey[400]),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  _buildSheetOption(
+                    dialogContext: dialogContext,
+                    goal: goal,
+                    status: GoalLogStatus.completed,
+                    icon: Icons.check_circle_rounded,
+                    label: 'Done',
+                    bgColor: const Color(0xFFDFF5E1),
+                    fgColor: const Color(0xFF34C759),
+                  ),
+                  const SizedBox(width: 10),
+                  _buildSheetOption(
+                    dialogContext: dialogContext,
+                    goal: goal,
+                    status: GoalLogStatus.missed,
+                    icon: Icons.cancel_rounded,
+                    label: 'Missed',
+                    bgColor: const Color(0xFFFBE2E1),
+                    fgColor: const Color(0xFFFF3B30),
+                  ),
+                  const SizedBox(width: 10),
+                  _buildSheetOption(
+                    dialogContext: dialogContext,
+                    goal: goal,
+                    status: GoalLogStatus.holiday,
+                    icon: Icons.beach_access_rounded,
+                    label: 'Holiday',
+                    bgColor: const Color(0xFFDCEBFB),
+                    fgColor: const Color(0xFF0A84FF),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  _buildSheetOption(
+                    dialogContext: dialogContext,
+                    goal: goal,
+                    status: GoalLogStatus.sick,
+                    icon: Icons.sick_rounded,
+                    label: 'Sick',
+                    bgColor: const Color(0xFFFCE8D6),
+                    fgColor: const Color(0xFFFF9F0A),
+                  ),
+                  const SizedBox(width: 10),
+                  _buildSheetOption(
+                    dialogContext: dialogContext,
+                    goal: goal,
+                    status: GoalLogStatus.skipped,
+                    icon: Icons.remove_circle_rounded,
+                    label: 'Skipped',
+                    bgColor: const Color(0xFFE7E7EA),
+                    fgColor: const Color(0xFF8E8E93),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: SizedBox(),
+                  ), // empty 3rd slot, matches mockup's 3+2 grid
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
+  Widget _buildSheetOption({
+    required BuildContext dialogContext,
+    required Goal goal,
+    required GoalLogStatus status,
+    required IconData icon,
+    required String label,
+    required Color bgColor,
+    required Color fgColor,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          Navigator.pop(dialogContext);
+          context.read<GoalBloc>().add(
+            LogGoalStatus(goalId: goal.id, status: status.name),
+          );
+        },
+        child: Container(
+          height: 84,
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: fgColor, size: 26),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: fgColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Goal card ──
+  Widget _buildGoalCard(BuildContext context, Goal goal) {
+    Color goalColor = kAccent;
+    try {
+      goalColor = Color(int.parse(goal.color.replaceFirst('#', '0xff')));
+    } catch (e) {}
+
+    final List<String?> last7DayStatuses = _getLast7DayStatuses(goal);
+
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: Colors.black.withOpacity(0.05)),
+      ),
+      child: InkWell(
+        onTap: () => _showStatusDialog(context, goal),
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(18.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Row(
                 children: [
                   Container(
@@ -213,7 +400,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     decoration: BoxDecoration(
                       color: goalColor.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: goalColor.withOpacity(0.3)),
                     ),
                     child: Icon(
                       _getGoalIcon(goal.icon),
@@ -226,264 +412,30 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'How did it go?',
-                          style: TextStyle(
-                            color: Colors.black45,
-                            fontSize: 12,
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.w500,
+                        Text(
+                          goal.title,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                            color: Colors.black87,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          goal.title,
-                          style: const TextStyle(
-                            color: Colors.black87,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.3,
+                          goal.category,
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 13,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
+                  Icon(Icons.chevron_right_rounded, color: Colors.grey[400]),
                 ],
               ),
-
-              const SizedBox(height: 28),
-
-              Row(
-                children: [
-                  _buildSheetOption(
-                    dialogContext: dialogContext,
-                    goal: goal,
-                    status: GoalLogStatus.completed,
-                    icon: Icons.check_rounded,
-                    label: 'Done',
-                    color: const Color(0xFF30D158),
-                  ),
-                  const SizedBox(width: 12),
-                  _buildSheetOption(
-                    dialogContext: dialogContext,
-                    goal: goal,
-                    status: GoalLogStatus.missed,
-                    icon: Icons.close_rounded,
-                    label: 'Missed',
-                    color: const Color(0xFFFF453A),
-                  ),
-                  const SizedBox(width: 12),
-                  _buildSheetOption(
-                    dialogContext: dialogContext,
-                    goal: goal,
-                    status: GoalLogStatus.holiday,
-                    icon: Icons.beach_access_rounded,
-                    label: 'Holiday',
-                    color: const Color(0xFF0A84FF),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  _buildSheetOption(
-                    dialogContext: dialogContext,
-                    goal: goal,
-                    status: GoalLogStatus.sick,
-                    icon: Icons.healing_rounded,
-                    label: 'Sick',
-                    color: const Color(0xFFFF9F0A),
-                  ),
-                  const SizedBox(width: 12),
-                  _buildSheetOption(
-                    dialogContext: dialogContext,
-                    goal: goal,
-                    status: GoalLogStatus.skipped,
-                    icon: Icons.skip_next_rounded,
-                    label: 'Skipped',
-                    color: const Color(0xFF8E8E93),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pop(dialogContext),
-                      child: Container(
-                        height: 88,
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.05),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Colors.black12),
-                        ),
-                        child: const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.arrow_downward_rounded,
-                              color: Colors.black38,
-                              size: 26,
-                            ),
-                            SizedBox(height: 6),
-                            Text(
-                              'Cancel',
-                              style: TextStyle(
-                                color: Colors.black38,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // ── New tile builder ─────────────────────────────────────────────────────────
-  Widget _buildSheetOption({
-    required BuildContext dialogContext,
-    required Goal goal,
-    required GoalLogStatus status,
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          Navigator.pop(dialogContext);
-          // ✅ reuse your existing BLoC dispatch here
-          context.read<GoalBloc>().add(
-            LogGoalStatus(goalId: goal.id, status: status.name),
-          );
-        },
-        child: Container(
-          height: 88,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withOpacity(0.25)),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.2,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusOption({
-    required BuildContext context,
-    required BuildContext dialogContext,
-    required Goal goal,
-    required GoalLogStatus status,
-    required IconData icon,
-    required Color color,
-  }) {
-    return ListTile(
-      leading: Icon(icon, color: color),
-      title: Row(
-        children: [
-          Text(status.displayName),
-          const SizedBox(width: 8),
-          Text(status.emoji, style: const TextStyle(fontSize: 16)),
-        ],
-      ),
-      onTap: () {
-        Navigator.pop(dialogContext);
-        if (goal.todayLogId != null) {
-          _updateGoalStatus(context, goal.todayLogId!, status.name);
-        } else {
-          _markGoalStatus(context, goal.id, status.name);
-        }
-      },
-    );
-  }
-
-  Widget _buildGoalCard(BuildContext context, Goal goal) {
-    Color goalColor = Colors.blue;
-    try {
-      goalColor = Color(int.parse(goal.color.replaceFirst('#', '0xff')));
-    } catch (e) {}
-
-    final List<String?> last7DayStatuses = _getLast7DayStatuses(goal);
-
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: InkWell(
-        onTap: () => _showStatusDialog(context, goal),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: goalColor.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  _getGoalIcon(goal.icon),
-                  color: goalColor,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      goal.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${goal.category} · Last 7 Days',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildSegmentedProgressBar(last7DayStatuses),
-                  ],
-                ),
-              ),
+              const SizedBox(height: 14),
+              _buildSegmentedProgressBar(last7DayStatuses),
             ],
           ),
         ),
@@ -510,7 +462,6 @@ class _HomeScreenState extends State<HomeScreen> {
       } else if (dateStr == todayStr) {
         statuses.add(goal.todayStatus ?? goal.recentLogs?[dateStr]);
       } else {
-        // Past days → use recentLogs from backend
         statuses.add(goal.recentLogs?[dateStr]);
       }
     }
@@ -520,97 +471,43 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSegmentedProgressBar(List<String?> statuses) {
     final todayIndex = DateTime.now().weekday - 1;
-    final dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
     return Row(
       children: List.generate(7, (index) {
         final status = statuses[index];
-        final color = _getStatusColor(status);
         final isToday = index == todayIndex;
         final isFuture = index > todayIndex;
+        final color = _getStatusColor(status);
 
         return Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3),
             child: Column(
               children: [
-                // ── Bar segment ──────────────────────────
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeOut,
-                  height: isToday ? 36 : 28,
-                  decoration: BoxDecoration(
-                    color:
-                        isFuture
-                            ? Colors.grey[100]
-                            : status != null
-                            ? color.withOpacity(0.15)
-                            : Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color:
-                          isToday
-                              ? color != Colors.grey[300]
-                                  ? color.withOpacity(0.6)
-                                  : Colors.black26
-                              : isFuture
-                              ? Colors.grey[200]!
-                              : status != null
-                              ? color.withOpacity(0.3)
-                              : Colors.grey[200]!,
-                      width: isToday ? 1.5 : 1,
-                    ),
-                    boxShadow:
-                        isToday && status != null
-                            ? [
-                              BoxShadow(
-                                color: color.withOpacity(0.25),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ]
-                            : null,
-                  ),
-                  child: Center(
-                    child:
-                        isFuture
-                            ? Icon(
-                              Icons.remove,
-                              size: 10,
-                              color: Colors.grey[300],
-                            )
-                            : status != null
-                            ? Icon(
-                              _getStatusIcon(status),
-                              size: isToday ? 16 : 13,
-                              color: color,
-                            )
-                            : Icon(
-                              Icons.circle_outlined,
-                              size: 10,
-                              color: Colors.grey[350],
-                            ),
-                  ),
-                ),
-                const SizedBox(height: 5),
-                // ── Day label ────────────────────────────
                 Text(
                   dayLabels[index],
                   style: TextStyle(
-                    fontSize: 8.5,
+                    fontSize: 10,
                     fontWeight: isToday ? FontWeight.w800 : FontWeight.w500,
                     color: isToday ? Colors.black87 : Colors.black38,
-                    letterSpacing: 0.2,
                   ),
                 ),
-                // ── Today dot ────────────────────────────
-                const SizedBox(height: 3),
+                const SizedBox(height: 6),
                 Container(
-                  width: isToday ? 4 : 0,
-                  height: isToday ? 4 : 0,
+                  height: 28,
                   decoration: BoxDecoration(
-                    color: status != null ? color : Colors.black45,
-                    shape: BoxShape.circle,
+                    color:
+                        isFuture
+                            ? Colors.grey[200]
+                            : status != null
+                            ? color
+                            : Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        isToday && status == null
+                            ? Border.all(color: kAccent, width: 1.5)
+                            : null,
                   ),
                 ),
               ],
@@ -621,38 +518,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ── Icon per status ──────────────────────────────────────
-  IconData _getStatusIcon(String status) {
-    switch (status) {
-      case 'completed':
-        return Icons.check_rounded;
-      case 'missed':
-        return Icons.close_rounded;
-      case 'holiday':
-        return Icons.beach_access_rounded;
-      case 'sick':
-        return Icons.healing_rounded;
-      case 'skipped':
-        return Icons.skip_next_rounded;
-      default:
-        return Icons.circle_outlined;
-    }
-  }
-
   Color _getStatusColor(String? status) {
     switch (status) {
       case 'completed':
-        return Colors.green;
+        return const Color(0xFF34C759);
       case 'missed':
-        return Colors.red;
+        return const Color(0xFFFF3B30);
       case 'holiday':
-        return Colors.blue;
+        return const Color(0xFF0A84FF);
       case 'sick':
-        return Colors.orange;
+        return const Color(0xFFFF9F0A);
       case 'skipped':
         return Colors.grey;
       default:
-        return Colors.grey[300]!;
+        return Colors.grey[200]!;
     }
   }
 
@@ -682,7 +561,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: const Color(0xFFF5F3FB),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state is AuthError) {
@@ -698,6 +577,14 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context, authState) {
           return BlocConsumer<GoalBloc, GoalState>(
             listener: (context, goalState) {
+              if (goalState is GoalsLoaded) {
+                setState(() => _cachedGoals = goalState.goals);
+              } else if (goalState is GoalLogged) {
+                setState(() => _cachedGoals = goalState.allGoals);
+              } else if (goalState is GoalLogUpdated) {
+                setState(() => _cachedGoals = goalState.allGoals);
+              }
+
               if (goalState is GoalError) {
                 _showClassicSnackbar(
                   context,
@@ -726,33 +613,53 @@ class _HomeScreenState extends State<HomeScreen> {
             },
             builder: (context, goalState) {
               return SafeArea(
+                bottom: false,
                 child: RefreshIndicator(
                   onRefresh:
                       () async =>
                           context.read<GoalBloc>().add(const LoadGoals()),
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(20.0),
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildHeader(context),
-                        const SizedBox(height: 24),
-                        _buildWelcomeCard(context),
-                        const SizedBox(height: 32),
-                        Text(
-                          'Your Goals',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[800],
-                          ),
+                        const SizedBox(height: 20),
+                        _buildWelcomeCard(context, goalState),
+                        const SizedBox(height: 28),
+                        Row(
+                          children: [
+                            Text(
+                              'Your goals',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[900],
+                              ),
+                            ),
+                            const Spacer(),
+                            Flexible(
+                              child: Text(
+                                'Tap a goal to log today',
+                                style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 12,
+                                ),
+                                textAlign: TextAlign.right,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 16),
                         _buildGoalsContent(context, goalState),
                         const SizedBox(height: 24),
+                        // ✅ RESTORED — was accidentally dropped last edit
                         _buildQuickStats(context, goalState),
+                        const SizedBox(height: 12),
                       ],
                     ),
                   ),
@@ -762,6 +669,7 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
+      // bottomNavigationBar: _buildBottomNavBar(context),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           final goalBloc = context.read<GoalBloc>();
@@ -776,7 +684,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           );
         },
-        backgroundColor: Colors.blue[600],
+        backgroundColor: kAccent,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
@@ -785,93 +693,114 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHeader(BuildContext context) {
     return Row(
       children: [
-        Icon(Icons.sailing, size: 32, color: Colors.blue[600]),
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: kAccent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.sailing_rounded,
+            color: Colors.white,
+            size: 22,
+          ),
+        ),
         const SizedBox(width: 12),
         Text(
           'Habit Harbor',
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.bold,
-            color: Colors.blue[700],
+            color: Colors.grey[900],
           ),
         ),
         const Spacer(),
         IconButton(
           onPressed: () => _navigateToProfile(context),
-          icon: Icon(Icons.account_circle, size: 32, color: Colors.blue[600]),
+          icon: Icon(Icons.account_circle, size: 32, color: kAccent),
         ),
       ],
     );
   }
 
-  Widget _buildWelcomeCard(BuildContext context) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 30,
-              backgroundColor: Colors.blue[100],
-              child: Icon(Icons.person, size: 30, color: Colors.blue[700]),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Welcome back, ${widget.user.fullName.split(' ').first} 👋',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[800],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Here are your current goals',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              onPressed: () => context.read<GoalBloc>().add(const LoadGoals()),
-              icon: Icon(Icons.refresh, color: Colors.green[600], size: 28),
-            ),
-          ],
+  Widget _buildWelcomeCard(BuildContext context, GoalState goalState) {
+    final goals = _cachedGoals;
+    // final goals = _getGoalsFromState(goalState);
+    final total = goals.length;
+    final logged = goals.where((g) => g.todayStatus != null).length;
+
+    final String subtitleText =
+        total == 0
+            ? 'Add your first goal to get started 🚀'
+            : logged == total
+            ? "You're all logged for today 🎉"
+            : "$logged of $total goals logged today";
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF5B3DF5), Color(0xFF3E2AB8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: kAccent.withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Welcome back,',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${widget.user.fullName.split(' ').first} 👋',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  subtitleText,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => context.read<GoalBloc>().add(const LoadGoals()),
+            icon: const Icon(Icons.refresh, color: Colors.white70, size: 26),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildGoalsContent(BuildContext context, GoalState goalState) {
-    if (goalState is GoalLoading) return _buildLoadingState();
-    if (goalState is GoalError)
+    if (goalState is GoalLoading && _cachedGoals.isEmpty)
+      return _buildLoadingState();
+    if (goalState is GoalError && _cachedGoals.isEmpty) {
       return _buildErrorState(context, goalState.message);
-
-    if (goalState is GoalsLoaded ||
-        goalState is GoalLogged ||
-        goalState is GoalLogUpdated ||
-        goalState is GoalActionLoading) {
-      List<Goal> goals = [];
-      if (goalState is GoalsLoaded)
-        goals = goalState.goals;
-      else if (goalState is GoalLogged)
-        goals = goalState.allGoals;
-      else if (goalState is GoalLogUpdated)
-        goals = goalState.allGoals;
-      else if (goalState is GoalActionLoading)
-        goals = goalState.goals;
-
-      if (goals.isEmpty) return _buildEmptyState(context);
-      return Column(
-        children: goals.map((goal) => _buildGoalCard(context, goal)).toList(),
-      );
     }
-
-    return _buildEmptyState(context);
+    if (_cachedGoals.isEmpty) return _buildEmptyState(context);
+    return Column(
+      children:
+          _cachedGoals.map((goal) => _buildGoalCard(context, goal)).toList(),
+    );
   }
 
   Widget _buildLoadingState() =>
@@ -923,14 +852,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  // ✅ RESTORED — quick stats row (History / Total Habits) that was dropped
   Widget _buildQuickStats(BuildContext context, GoalState goalState) {
     return Row(
       children: [
         Expanded(
           child: Card(
-            elevation: 2,
+            elevation: 0,
+            color: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.black.withOpacity(0.05)),
             ),
             child: InkWell(
               onTap: () => _navigateToHistory(context),
@@ -939,17 +871,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.all(20.0),
                 child: Column(
                   children: [
-                    Icon(Icons.history, color: Colors.blue[600], size: 32),
+                    Icon(Icons.bar_chart_rounded, color: kAccent, size: 28),
                     const SizedBox(height: 8),
                     const Text(
                       'History',
                       style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    _buildTodayStatsText(goalState),
+                    const SizedBox(height: 2),
+                    Text(
+                      'View analytics',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    ),
                   ],
                 ),
               ),
@@ -959,22 +894,21 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(width: 16),
         Expanded(
           child: Card(
-            elevation: 2,
+            elevation: 0,
+            color: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: Colors.black.withOpacity(0.05)),
             ),
             child: InkWell(
               onTap: () {
-                final goals = _getGoalsFromState(
-                  context.read<GoalBloc>().state,
-                );
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder:
                         (context) => BlocProvider.value(
                           value: context.read<GoalBloc>(),
-                          child: AllHabitsScreen(goals: goals),
+                          child: AllHabitsScreen(goals: _cachedGoals),
                         ),
                   ),
                 );
@@ -984,17 +918,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 padding: const EdgeInsets.all(20.0),
                 child: Column(
                   children: [
-                    Icon(Icons.trending_up, color: Colors.green[600], size: 32),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Total Habits',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                      ),
+                    Icon(
+                      Icons.check_circle_outline_rounded,
+                      color: kAccent,
+                      size: 28,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
                     _buildTotalStatsText(goalState),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Total habits',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    ),
                   ],
                 ),
               ),
@@ -1005,55 +940,47 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildTotalStatsText(GoalState goalState) {
+    return Text(
+      '${_cachedGoals.length}',
+      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+    );
+  }
+
   List<Goal> _getGoalsFromState(GoalState goalState) {
     if (goalState is GoalsLoaded) return goalState.goals;
     if (goalState is GoalLogged) return goalState.allGoals;
     if (goalState is GoalLogUpdated) return goalState.allGoals;
+    if (goalState is GoalActionLoading) return goalState.goals;
     return [];
   }
 
-  Widget _buildTodayStatsText(GoalState goalState) {
-    final goals = _getGoalsFromState(goalState);
-    if (goals.isEmpty) {
-      return const Text(
-        'No goals yet',
-        style: TextStyle(color: Colors.grey, fontSize: 12),
-      );
-    }
-
-    final total = goals.length;
-    final logged = goals.where((g) => g.todayStatus != null).length;
-    final pending = total - logged;
-    final hour = DateTime.now().hour;
-
-    final timeHint =
-        hour < 12
-            ? '☀️ Morning'
-            : hour < 18
-            ? '🌤 Afternoon'
-            : '🌙 Tonight';
-
-    return Text(
-      pending == 0 ? 'All logged! ' : '$timeHint · $pending left',
-      style: TextStyle(
-        color: pending == 0 ? Colors.green : Colors.grey,
-        fontSize: 12,
-      ),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    );
-  }
-
-  Widget _buildTotalStatsText(GoalState goalState) {
-    final goals = _getGoalsFromState(goalState);
-    if (goals.isEmpty)
-      return const Text(
-        '- active',
-        style: TextStyle(color: Colors.grey, fontSize: 12),
-      );
-    return Text(
-      '${goals.length} active',
-      style: const TextStyle(color: Colors.grey, fontSize: 12),
+  Widget _buildBottomNavBar(BuildContext context) {
+    return BottomNavigationBar(
+      currentIndex: _navIndex,
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: kAccent,
+      unselectedItemColor: Colors.grey[500],
+      showUnselectedLabels: true,
+      onTap: (index) {
+        if (index == _navIndex) return;
+        if (index == 1) {
+          _navigateToHistory(context);
+        } else if (index == 2) {
+          _navigateToProfile(context);
+        }
+      },
+      items: const [
+        BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Home'),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.bar_chart_rounded),
+          label: 'History',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person_rounded),
+          label: 'Profile',
+        ),
+      ],
     );
   }
 }

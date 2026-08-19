@@ -2,15 +2,22 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiClient {
-  // ─── Base URLs ────────────────────────────────────────────
+  // ─── Base URLs For Vercel ────────────────────────────────────────────
   // static const String defaultAuthBaseUrl =
   //     'https://habit-harbor-backend-deploy.vercel.app/api/auth';
   // static const String defaultGoalsBaseUrl =
   //     'https://habit-harbor-backend-deploy.vercel.app/api';
 
-  //For Locally Run Server
-  static const String defaultAuthBaseUrl = 'http://10.207.134.23:3000/api/auth';
-  static const String defaultGoalsBaseUrl = 'http://10.207.134.23:3000/api';
+  // Base URLs For GCP Cloud
+
+  static const String defaultAuthBaseUrl =
+      'https://habit-harbor-backend-1027244281745.asia-south1.run.app/api/auth';
+  static const String defaultGoalsBaseUrl =
+      'https://habit-harbor-backend-1027244281745.asia-south1.run.app/api';
+
+  // //For Locally Run Server
+  // static const String defaultAuthBaseUrl = 'http://10.207.134.23:3000/api/auth';
+  // static const String defaultGoalsBaseUrl = 'http://10.207.134.23:3000/api';
 
   static const String accessTokenKey = 'access_token';
   static const String refreshTokenKey = 'refresh_token';

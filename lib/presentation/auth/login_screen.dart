@@ -9,6 +9,7 @@ import '../../core/widgets/custom_text_field.dart';
 import '../../core/widgets/loading_overlay.dart';
 import '../../domain/entities/auth_request.dart';
 
+import 'forget_password_screen.dart';
 import 'home_screen.dart';
 import 'register_screen.dart';
 
@@ -20,6 +21,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const Color kAccent = Color(0xFF5B3DF5);
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -56,10 +59,18 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  // ✅ new
+  void _navigateToForgotPassword() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // This prevents the body from resizing when keyboard appears
+      backgroundColor: const Color(0xFFF5F3FB),
       resizeToAvoidBottomInset: false,
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
@@ -84,7 +95,6 @@ class _LoginScreenState extends State<LoginScreen> {
             isLoading: state is AuthLoading,
             child: SafeArea(
               child: SingleChildScrollView(
-                // This allows scrolling when keyboard appears
                 physics: const ClampingScrollPhysics(),
                 padding: EdgeInsets.only(
                   left: 24.0,
@@ -106,95 +116,179 @@ class _LoginScreenState extends State<LoginScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Top spacer - flexible
                           const Expanded(child: SizedBox()),
 
-                          // Logo/Title
-                          const Icon(
-                            Icons.login_rounded,
-                            size: 80,
-                            color: Colors.blue,
+                          Center(
+                            child: Container(
+                              width: 72,
+                              height: 72,
+                              decoration: BoxDecoration(
+                                color: kAccent,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: kAccent.withOpacity(0.3),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.sailing_rounded,
+                                size: 36,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
-                          const SizedBox(height: 24),
-                          Text(
-                            'Welcome Back',
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Habit Harbor',
                             textAlign: TextAlign.center,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.headlineMedium?.copyWith(
+                            style: TextStyle(
+                              fontSize: 22,
                               fontWeight: FontWeight.bold,
-                              color: Colors.blue[800],
+                              color: Colors.black87,
                             ),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Sign in to your account',
+                            'Welcome back — sign in to continue',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyLarge
-                                ?.copyWith(color: Colors.grey[600]),
-                          ),
-                          const SizedBox(height: 48),
-
-                          // Email Field
-                          CustomTextField(
-                            controller: _emailController,
-                            label: 'Email',
-                            hintText: 'Enter your email',
-                            prefixIcon: Icons.email_outlined,
-                            keyboardType: TextInputType.emailAddress,
-                            validator: (value) {
-                              if (value?.isEmpty ?? true) {
-                                return 'Please enter your email';
-                              }
-                              if (!RegExp(
-                                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                              ).hasMatch(value!)) {
-                                return 'Please enter a valid email';
-                              }
-                              return null;
-                            },
-                            labelText: '',
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Password Field
-                          CustomTextField(
-                            controller: _passwordController,
-                            label: 'Password',
-                            hintText: 'Enter your password',
-                            prefixIcon: Icons.lock_outline,
-                            obscureText: _obscurePassword,
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 14,
                             ),
-                            validator: (value) {
-                              if (value?.isEmpty ?? true) {
-                                return 'Please enter your password';
-                              }
-                              return null;
-                            },
-                            labelText: '',
                           ),
-                          const SizedBox(height: 32),
+                          const SizedBox(height: 40),
 
-                          // Login Button
-                          CustomButton(
-                            text: 'Sign In',
-                            onPressed: _handleLogin,
-                            isLoading: state is AuthLoading,
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.04),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                CustomTextField(
+                                  controller: _emailController,
+                                  label: 'Email',
+                                  hintText: 'Enter your email',
+                                  prefixIcon: Icons.email_outlined,
+                                  keyboardType: TextInputType.emailAddress,
+                                  validator: (value) {
+                                    if (value?.isEmpty ?? true) {
+                                      return 'Please enter your email';
+                                    }
+                                    if (!RegExp(
+                                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                                    ).hasMatch(value!)) {
+                                      return 'Please enter a valid email';
+                                    }
+                                    return null;
+                                  },
+                                  labelText: '',
+                                ),
+                                const SizedBox(height: 16),
+                                CustomTextField(
+                                  controller: _passwordController,
+                                  label: 'Password',
+                                  hintText: 'Enter your password',
+                                  prefixIcon: Icons.lock_outline,
+                                  obscureText: _obscurePassword,
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      color: Colors.grey[400],
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
+                                  ),
+                                  validator: (value) {
+                                    if (value?.isEmpty ?? true) {
+                                      return 'Please enter your password';
+                                    }
+                                    return null;
+                                  },
+                                  labelText: '',
+                                ),
+                                SizedBox(height: 10),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton(
+                                    onPressed: _navigateToForgotPassword,
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      minimumSize: const Size(0, 0),
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: const Text(
+                                      'Forgot Password?',
+                                      style: TextStyle(
+                                        color: kAccent,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 12),
+
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 54,
+                                  child: ElevatedButton(
+                                    onPressed:
+                                        state is AuthLoading
+                                            ? null
+                                            : _handleLogin,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: kAccent,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                    child:
+                                        state is AuthLoading
+                                            ? const SizedBox(
+                                              height: 20,
+                                              width: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                            : const Text(
+                                              'Sign In',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
+
                           const SizedBox(height: 24),
 
-                          // Register Link
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -204,18 +298,17 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               GestureDetector(
                                 onTap: _navigateToRegister,
-                                child: Text(
+                                child: const Text(
                                   'Sign Up',
                                   style: TextStyle(
-                                    color: Colors.blue[600],
-                                    fontWeight: FontWeight.w600,
+                                    color: kAccent,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),
                             ],
                           ),
 
-                          // Bottom spacer - flexible
                           const Expanded(child: SizedBox()),
                         ],
                       ),

@@ -433,7 +433,9 @@ class _GoalsScreenState extends State<GoalsScreen> {
   }
 
   String _formatFrequency(String frequency, int count) {
-    if (count == 1) return frequency.capitalize();
+    if (count == 1) {
+      return frequency[0].toUpperCase() + frequency.substring(1);
+    }
     return '$count times $frequency';
   }
 

@@ -15,14 +15,18 @@ class HistoryDetailsScreen extends StatefulWidget {
 
 class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     with SingleTickerProviderStateMixin {
+  static const Color kAccent = Color(0xFF5B3DF5);
+
   late TabController _tabController;
   String _selectedPeriod = 'month';
 
-  // Store analytics data from BLoC
   Map<String, dynamic>? _overviewData;
   Map<String, Map<String, dynamic>> _goalAnalytics = {};
   bool _isLoading = true;
   String? _errorMessage;
+
+  final List<String> _periodKeys = ['month', 'quarter', 'halfyear', 'year'];
+  final List<String> _periodLabels = ['Month', 'Quarter', '6 Months', 'Year'];
 
   @override
   void initState() {
@@ -41,8 +45,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
 
   void _onTabChanged() {
     if (_tabController.indexIsChanging) {
-      final periods = ['month', 'quarter', 'halfyear', 'year'];
-      final newPeriod = periods[_tabController.index];
+      final newPeriod = _periodKeys[_tabController.index];
       if (newPeriod != _selectedPeriod) {
         setState(() {
           _selectedPeriod = newPeriod;
@@ -74,17 +77,13 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     }
   }
 
-  // ── History Edit ────────────────────────────────────────────────────────────
-
-  /// Called when the user taps a calendar day cell.
-  /// Blocks future dates and shows a bottom sheet to pick a new status.
+  // ── History Edit ────────────────────────────────────────────────────────
   void _onCalendarDayTapped(
     BuildContext context,
     String goalId,
     String dateStr,
     String? currentStatus,
   ) {
-    // Block future dates
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     if (dateStr.compareTo(today) > 0) return;
 
@@ -100,7 +99,6 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Header ───────────────────────────────
               Row(
                 children: [
                   const Icon(Icons.edit_calendar, size: 20),
@@ -144,8 +142,6 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
                 ),
               ),
               const SizedBox(height: 12),
-
-              // ── Status buttons ────────────────────────
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -157,7 +153,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
                       return ElevatedButton.icon(
                         onPressed:
                             isCurrentStatus
-                                ? null // already this status — no-op
+                                ? null
                                 : () {
                                   Navigator.pop(ctx);
                                   context.read<GoalBloc>().add(
@@ -215,8 +211,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     }
   }
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-
+  // ── Helpers ──────────────────────────────────────────────────────────────
   Goal? _goalFromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
     try {
@@ -255,21 +250,11 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     return null;
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
-
+  // ── Build ────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Goals History'),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadAnalyticsData,
-          ),
-        ],
-      ),
+      backgroundColor: const Color(0xFFF5F3FB),
       body: BlocConsumer<GoalBloc, GoalState>(
         listener: (context, state) {
           if (state is OverviewAnalyticsLoaded) {
@@ -324,56 +309,92 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
           }
         },
         builder: (context, state) {
-          if (_isLoading) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Loading analytics...'),
-                ],
-              ),
-            );
-          }
-
-          if (_errorMessage != null) return _buildErrorState();
-          if (_overviewData == null) return _buildEmptyState();
-
-          final goalsData = _overviewData!['goals'] as List<dynamic>?;
-          if (goalsData == null) return _buildEmptyState();
-
-          final goals =
-              goalsData
-                  .map((g) => _goalFromJson(g as Map<String, dynamic>?))
-                  .where((g) => g != null)
-                  .cast<Goal>()
-                  .toList();
-
-          return Column(
-            children: [
-              _buildSummaryStats(),
-              _buildPeriodTabs(),
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildGoalsList(goals, 'month'),
-                    _buildGoalsList(goals, 'quarter'),
-                    _buildGoalsList(goals, 'halfyear'),
-                    _buildGoalsList(goals, 'year'),
-                  ],
+          return SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Goals History',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, color: kAccent),
+                        onPressed: _loadAnalyticsData,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                Expanded(
+                  child:
+                      _isLoading
+                          ? const Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                CircularProgressIndicator(color: kAccent),
+                                SizedBox(height: 16),
+                                Text('Loading analytics...'),
+                              ],
+                            ),
+                          )
+                          : _errorMessage != null
+                          ? _buildErrorState()
+                          : _overviewData == null
+                          ? _buildEmptyState()
+                          : _buildContent(),
+                ),
+              ],
+            ),
           );
         },
       ),
     );
   }
 
-  // ── Error / Empty ────────────────────────────────────────────────────────────
+  Widget _buildContent() {
+    final goalsData = _overviewData!['goals'] as List<dynamic>?;
+    if (goalsData == null) return _buildEmptyState();
 
+    final goals =
+        goalsData
+            .map((g) => _goalFromJson(g as Map<String, dynamic>?))
+            .where((g) => g != null)
+            .cast<Goal>()
+            .toList();
+
+    return Column(
+      children: [
+        _buildSummaryStats(),
+        const SizedBox(height: 16),
+        _buildPeriodTabs(),
+        const SizedBox(height: 12),
+        _buildLegendRow(),
+        const SizedBox(height: 8),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildGoalsList(goals),
+              _buildGoalsList(goals),
+              _buildGoalsList(goals),
+              _buildGoalsList(goals),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Error / Empty ──────────────────────────────────────────────────────
   Widget _buildErrorState() {
     return Center(
       child: Padding(
@@ -403,7 +424,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
               icon: const Icon(Icons.refresh),
               label: const Text('Try Again'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
+                backgroundColor: kAccent,
                 foregroundColor: Colors.white,
               ),
             ),
@@ -439,119 +460,130 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     );
   }
 
-  // ── Summary Stats ────────────────────────────────────────────────────────────
-
+  // ── Summary Stats: purple gradient overview card ──────────────────────
   Widget _buildSummaryStats() {
     final stats = _overviewData?['stats'] as Map<String, dynamic>?;
     final totalGoals = _safeParseInt(_overviewData?['totalGoals']) ?? 0;
     if (stats == null) return const SizedBox.shrink();
 
     return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 22),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.deepPurple[400]!, Colors.deepPurple[600]!],
+        gradient: const LinearGradient(
+          colors: [Color(0xFF5B3DF5), Color(0xFF3E2AB8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.deepPurple.withOpacity(0.3),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+            color: kAccent.withOpacity(0.3),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            children: [
-              const Icon(Icons.analytics, color: Colors.white, size: 28),
-              const SizedBox(width: 12),
-              Text(
-                '${_getPeriodDisplayName(_selectedPeriod)} Overview',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
+          Expanded(child: _buildStatItem('$totalGoals', 'Total Goals')),
+          Expanded(
+            child: _buildStatItem(
+              '${_safeParseInt(stats['completed']) ?? 0}',
+              'Completed',
+            ),
           ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatItem('Total Goals', '$totalGoals', Icons.flag),
-              ),
-              Expanded(
-                child: _buildStatItem(
-                  'Completed',
-                  '${_safeParseInt(stats['completed']) ?? 0}',
-                  Icons.check_circle,
-                ),
-              ),
-              Expanded(
-                child: _buildStatItem(
-                  'Success Rate',
-                  '${_safeParseInt(stats['completionRate']) ?? 0}%',
-                  Icons.trending_up,
-                ),
-              ),
-            ],
+          Expanded(
+            child: _buildStatItem(
+              '${_safeParseInt(stats['completionRate']) ?? 0}%',
+              'Success Rate',
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon) {
+  Widget _buildStatItem(String value, String label) {
     return Column(
       children: [
-        Icon(icon, color: Colors.white70, size: 24),
-        const SizedBox(height: 8),
         Text(
           value,
           style: const TextStyle(
             color: Colors.white,
-            fontSize: 24,
+            fontSize: 26,
             fontWeight: FontWeight.bold,
           ),
         ),
+        const SizedBox(height: 2),
         Text(
           label,
           style: const TextStyle(color: Colors.white70, fontSize: 12),
-          textAlign: TextAlign.center,
         ),
       ],
     );
   }
 
-  // ── Period Tabs ──────────────────────────────────────────────────────────────
-
+  // ── Pill-style segmented tabs ──────────────────────────────────────────
   Widget _buildPeriodTabs() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: TabBar(
         controller: _tabController,
-        labelColor: Colors.deepPurple,
-        unselectedLabelColor: Colors.grey[600],
-        indicatorColor: Colors.deepPurple,
-        tabs: const [
-          Tab(text: 'Month'),
-          Tab(text: 'Quarter'),
-          Tab(text: '6 Months'),
-          Tab(text: 'Year'),
+        indicator: BoxDecoration(
+          color: kAccent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        dividerColor: Colors.transparent,
+        labelColor: Colors.white,
+        unselectedLabelColor: Colors.grey[500],
+        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        tabs: _periodLabels.map((l) => Tab(text: l)).toList(),
+      ),
+    );
+  }
+
+  // ── Legend row: colored dots + labels ──────────────────────────────────
+  Widget _buildLegendRow() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Wrap(
+        spacing: 14,
+        runSpacing: 6,
+        children: [
+          _legendDot('Done', const Color(0xFF34C759)),
+          _legendDot('Missed', const Color(0xFFFF3B30)),
+          _legendDot('Holiday', const Color(0xFF0A84FF)),
+          _legendDot('Sick', const Color(0xFFFF9F0A)),
+          _legendDot('Skipped', Colors.grey),
         ],
       ),
     );
   }
 
-  // ── Goals List ───────────────────────────────────────────────────────────────
+  Widget _legendDot(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+      ],
+    );
+  }
 
-  Widget _buildGoalsList(List<Goal> goals, String period) {
+  // ── Goals List ───────────────────────────────────────────────────────
+  Widget _buildGoalsList(List<Goal> goals) {
     if (goals.isEmpty) {
       return Center(
         child: Column(
@@ -579,8 +611,9 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
 
     return RefreshIndicator(
       onRefresh: () async => _loadAnalyticsData(),
+      color: kAccent,
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
         itemCount: goals.length,
         itemBuilder: (context, index) {
           final goal = goals[index];
@@ -590,52 +623,48 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     );
   }
 
-  // ── Goal Stats Card ──────────────────────────────────────────────────────────
-
+  // ── Goal Stats Card matching mockup: header, 4 mini-stat tiles, calendar ──
   Widget _buildGoalStatsCard(Goal goal, Map<String, dynamic>? analytics) {
-    Color goalColor = Colors.deepPurple;
+    Color goalColor = kAccent;
     try {
       goalColor = Color(int.parse(goal.color.replaceFirst('#', '0xff')));
     } catch (_) {}
 
-    // Loading skeleton while per-goal analytics arrive
     if (analytics == null) {
-      return Card(
-        margin: const EdgeInsets.only(bottom: 16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: goalColor.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  _getGoalIcon(goal.icon),
-                  color: goalColor,
-                  size: 24,
-                ),
+      return Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: goalColor.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  goal.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+              child: Icon(_getGoalIcon(goal.icon), color: goalColor, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                goal.title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
               ),
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ],
         ),
       );
     }
@@ -644,225 +673,120 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     final logs = analytics['logs'] as List<dynamic>? ?? [];
 
     final completed = _safeParseInt(stats['completed']) ?? 0;
-    final totalDays = _safeParseInt(stats['totalDays']) ?? 1;
-    final completionRate = _safeParseInt(stats['completionRate']) ?? 0;
+    final missed = _safeParseInt(stats['missed']) ?? 0;
     final currentStreak = _safeParseInt(stats['currentStreak']) ?? 0;
     final longestStreak = _safeParseInt(stats['longestStreak']) ?? 0;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ExpansionTile(
-        leading: Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: goalColor.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          leading: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: goalColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(_getGoalIcon(goal.icon), color: goalColor, size: 22),
           ),
-          child: Icon(_getGoalIcon(goal.icon), color: goalColor, size: 24),
-        ),
-        title: Text(
-          goal.title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          title: Text(
+            goal.title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          subtitle: Text(
+            goal.category,
+            style: TextStyle(color: Colors.grey[500], fontSize: 12),
+          ),
           children: [
-            const SizedBox(height: 4),
-            Text(
-              goal.category,
-              style: TextStyle(
-                color: goalColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildProgressBar(completionRate / 100, goalColor),
-            const SizedBox(height: 4),
-            Text(
-              '$completed/$totalDays days tracked ($completionRate%)',
-              style: TextStyle(color: Colors.grey[600], fontSize: 12),
-            ),
-            Text(
-              'Goal started ${DateFormat('MMM d, y').format(goal.createdAt)}',
-              style: TextStyle(color: Colors.grey[600], fontSize: 10),
-            ),
-          ],
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Row(
               children: [
-                // Stats row
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMiniStat(
-                        'Completed',
-                        '$completed',
-                        Colors.green,
-                        Icons.check_circle,
-                      ),
-                    ),
-                    Expanded(
-                      child: _buildMiniStat(
-                        'Missed',
-                        '${_safeParseInt(stats['missed']) ?? 0}',
-                        Colors.red,
-                        Icons.cancel,
-                      ),
-                    ),
-                    Expanded(
-                      child: _buildMiniStat(
-                        'Current Streak',
-                        '$currentStreak',
-                        Colors.orange,
-                        Icons.local_fire_department,
-                      ),
-                    ),
-                    Expanded(
-                      child: _buildMiniStat(
-                        'Best Streak',
-                        '$longestStreak',
-                        Colors.purple,
-                        Icons.emoji_events,
-                      ),
-                    ),
-                  ],
+                Expanded(
+                  child: _buildMiniStatTile(
+                    '$completed',
+                    'Completed',
+                    const Color(0xFFDFF5E1),
+                    const Color(0xFF34C759),
+                  ),
                 ),
-                const SizedBox(height: 16),
-
-                const Text(
-                  'Status Breakdown',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildMiniStatTile(
+                    '$missed',
+                    'Missed',
+                    const Color(0xFFFBE2E1),
+                    const Color(0xFFFF3B30),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                _buildRealStatusBreakdown(stats),
-                const SizedBox(height: 16),
-
-                // ✅ "Tap a day to edit" hint
-                Row(
-                  children: [
-                    const Text(
-                      'Calendar View',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '(tap a day to edit)',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.grey[500],
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildMiniStatTile(
+                    '$currentStreak',
+                    'Current Streak',
+                    const Color(0xFFEDE9FE),
+                    const Color(0xFF7C3AED),
+                  ),
                 ),
-                const SizedBox(height: 8),
-
-                // ✅ goalId is now passed down so taps can fire EditHistoryLog
-                _buildRealCalendar(logs, goalColor, goal.id),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildMiniStatTile(
+                    '$longestStreak',
+                    'Best Streak',
+                    const Color(0xFFEDE9FE),
+                    const Color(0xFF7C3AED),
+                  ),
+                ),
               ],
             ),
+            const SizedBox(height: 16),
+            _buildRealCalendar(logs, goalColor, goal.id),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniStatTile(String value, String label, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: fg,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(color: fg.withOpacity(0.8), fontSize: 10),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
     );
   }
 
-  // ── Status Breakdown ─────────────────────────────────────────────────────────
-
-  Widget _buildRealStatusBreakdown(Map<String, dynamic> stats) {
-    final statuses = [
-      {
-        'name': 'Completed',
-        'value': _safeParseInt(stats['completed']) ?? 0,
-        'color': Colors.green,
-        'emoji': '✅',
-      },
-      {
-        'name': 'Missed',
-        'value': _safeParseInt(stats['missed']) ?? 0,
-        'color': Colors.red,
-        'emoji': '❌',
-      },
-      {
-        'name': 'Holiday',
-        'value': _safeParseInt(stats['holiday']) ?? 0,
-        'color': Colors.blue,
-        'emoji': '🏖️',
-      },
-      {
-        'name': 'Sick',
-        'value': _safeParseInt(stats['sick']) ?? 0,
-        'color': Colors.orange,
-        'emoji': '🤒',
-      },
-      {
-        'name': 'Skipped',
-        'value': _safeParseInt(stats['skipped']) ?? 0,
-        'color': Colors.grey,
-        'emoji': '⏭️',
-      },
-      {
-        'name': 'Unlogged',
-        'value': _safeParseInt(stats['unloggedDays']) ?? 0,
-        'color': Colors.grey[400]!,
-        'emoji': '⭕',
-      },
-    ];
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      children:
-          statuses.map((status) {
-            final value = status['value'] as int;
-            if (value == 0) return const SizedBox.shrink();
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: (status['color'] as Color).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    status['emoji'] as String,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${status['name']}: $value',
-                    style: TextStyle(
-                      color: status['color'] as Color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-    );
-  }
-
-  // ── Calendar ─────────────────────────────────────────────────────────────────
-
-  /// ✅ Accepts [goalId] so each cell can trigger an edit.
+  // ── Calendar ─────────────────────────────────────────────────────────
   Widget _buildRealCalendar(
     List<dynamic> logs,
     Color goalColor,
-    String goalId, // ← NEW
+    String goalId,
   ) {
     final Map<String, String> logMap = {};
     for (final log in logs) {
@@ -884,42 +808,27 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ...monthGroups.entries.map((entry) {
-          final monthDates = entry.value;
-          final monthLabel = DateFormat('MMMM yyyy').format(monthDates.first);
-          return _buildMonthGrid(
-            monthLabel,
-            monthDates,
-            logMap,
-            goalColor,
-            goalId, // ← NEW
-          );
-        }),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
-          children: [
-            _buildLegendItem('Completed', Colors.green),
-            _buildLegendItem('Missed', Colors.red),
-            _buildLegendItem('Holiday', Colors.blue),
-            _buildLegendItem('Sick', Colors.orange),
-            _buildLegendItem('Skipped', Colors.grey),
-            _buildLegendItem('No log', Colors.grey[300]!),
-          ],
-        ),
-      ],
+      children:
+          monthGroups.entries.map((entry) {
+            final monthDates = entry.value;
+            final monthLabel = DateFormat('MMMM yyyy').format(monthDates.first);
+            return _buildMonthGrid(
+              monthLabel,
+              monthDates,
+              logMap,
+              goalColor,
+              goalId,
+            );
+          }).toList(),
     );
   }
 
-  /// ✅ Accepts [goalId] and wraps each day cell in a GestureDetector.
   Widget _buildMonthGrid(
     String monthLabel,
     List<DateTime> monthDates,
     Map<String, String> logMap,
     Color goalColor,
-    String goalId, // ← NEW
+    String goalId,
   ) {
     final firstDay = monthDates.first;
     final startPadding = (firstDay.weekday - 1) % 7;
@@ -945,18 +854,11 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
 
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Month header
           Text(
             monthLabel,
             style: const TextStyle(
@@ -966,19 +868,17 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
             ),
           ),
           const SizedBox(height: 8),
-
-          // Day-of-week headers
           Row(
             children:
-                ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                ['M', 'T', 'W', 'T', 'F', 'S', 'S']
                     .map(
                       (d) => Expanded(
                         child: Center(
                           child: Text(
                             d,
                             style: TextStyle(
-                              fontSize: 9,
-                              color: Colors.grey[500],
+                              fontSize: 10,
+                              color: Colors.grey[400],
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -988,17 +888,14 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
                     .toList(),
           ),
           const SizedBox(height: 4),
-
-          // Week rows
           ...weeks.map(
             (week) => Padding(
-              padding: const EdgeInsets.only(bottom: 2),
+              padding: const EdgeInsets.only(bottom: 4),
               child: Row(
                 children:
                     week.map((date) {
-                      // Empty padding cell
                       if (date == null) {
-                        return const Expanded(child: SizedBox(height: 28));
+                        return const Expanded(child: SizedBox(height: 30));
                       }
 
                       final dateStr = DateFormat('yyyy-MM-dd').format(date);
@@ -1007,41 +904,51 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
                       final isFuture = dateStr.compareTo(todayStr) > 0;
 
                       return Expanded(
-                        // ✅ GestureDetector wraps the cell
-                        child: GestureDetector(
-                          onTap:
-                              isFuture
-                                  ? null // silently ignore future taps
-                                  : () => _onCalendarDayTapped(
-                                    context,
-                                    goalId,
-                                    dateStr,
-                                    status,
+                        child: Padding(
+                          padding: const EdgeInsets.all(2),
+                          child: GestureDetector(
+                            onTap:
+                                isFuture
+                                    ? null
+                                    : () => _onCalendarDayTapped(
+                                      context,
+                                      goalId,
+                                      dateStr,
+                                      status,
+                                    ),
+                            child: Container(
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color:
+                                    status != null
+                                        ? _getColorForStatus(status, goalColor)
+                                        : null,
+                                borderRadius: BorderRadius.circular(8),
+                                border:
+                                    status == null
+                                        ? Border.all(
+                                          color:
+                                              isToday
+                                                  ? kAccent
+                                                  : Colors.grey[300]!,
+                                          width: isToday ? 1.6 : 1,
+                                          style: BorderStyle.solid,
+                                        )
+                                        : isToday
+                                        ? Border.all(color: kAccent, width: 1.6)
+                                        : null,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${date.day}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color:
+                                        status != null
+                                            ? Colors.white
+                                            : Colors.grey[400],
                                   ),
-                          child: Container(
-                            height: 28,
-                            margin: const EdgeInsets.symmetric(horizontal: 1),
-                            decoration: BoxDecoration(
-                              color: _getColorForStatus(status, goalColor),
-                              borderRadius: BorderRadius.circular(4),
-                              border:
-                                  isToday
-                                      ? Border.all(
-                                        color: Colors.black54,
-                                        width: 1.5,
-                                      )
-                                      : null,
-                            ),
-                            child: Center(
-                              child: Text(
-                                '${date.day}',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w500,
-                                  color:
-                                      status != null
-                                          ? Colors.white
-                                          : Colors.grey[500],
                                 ),
                               ),
                             ),
@@ -1057,84 +964,7 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     );
   }
 
-  // ── Misc Widgets ─────────────────────────────────────────────────────────────
-
-  Widget _buildLegendItem(String label, Color color) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontSize: 9, color: Colors.grey[600])),
-      ],
-    );
-  }
-
-  Widget _buildProgressBar(double progress, Color color) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final totalWidth = constraints.maxWidth;
-        final filledWidth = totalWidth * progress.clamp(0.0, 1.0);
-        return Stack(
-          children: [
-            Container(
-              height: 6,
-              width: totalWidth,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            Container(
-              height: 6,
-              width: filledWidth,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildMiniStat(
-    String label,
-    String value,
-    Color color,
-    IconData icon,
-  ) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(color: Colors.grey[600], fontSize: 10),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-
-  // ── Helper Methods ───────────────────────────────────────────────────────────
-
+  // ── Helper Methods ───────────────────────────────────────────────────
   IconData _getGoalIcon(String iconName) {
     switch (iconName.toLowerCase()) {
       case 'fitness':
@@ -1158,21 +988,6 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
     }
   }
 
-  String _getPeriodDisplayName(String period) {
-    switch (period) {
-      case 'month':
-        return 'This Month';
-      case 'quarter':
-        return 'This Quarter';
-      case 'halfyear':
-        return 'Last 6 Months';
-      case 'year':
-        return 'This Year';
-      default:
-        return 'This Month';
-    }
-  }
-
   List<DateTime> _getDateRangeForPeriod(String period) {
     final now = DateTime.now();
     DateTime start;
@@ -1184,20 +999,16 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
         end = DateTime(now.year, now.month + 1, 0);
         break;
       case 'quarter':
-        start = DateTime(
-          now.year,
-          now.month - 2,
-          1,
-        ); // 3 months total, including current
-        end = DateTime(now.year, now.month + 1, 0); // end of current month
+        start = DateTime(now.year, now.month - 2, 1);
+        end = DateTime(now.year, now.month + 1, 0);
         break;
       case 'halfyear':
         start = DateTime(now.year, now.month - 5, 1);
         end = DateTime(now.year, now.month + 1, 0);
         break;
       case 'year':
-        start = DateTime(now.year, 1, 1);
-        end = now;
+        start = DateTime(now.year, now.month - 11, 1);
+        end = DateTime(now.year, now.month + 1, 0);
         break;
       default:
         start = DateTime(now.year, now.month, 1);
@@ -1211,13 +1022,13 @@ class _HistoryDetailsScreenState extends State<HistoryDetailsScreen>
   Color _getColorForStatus(String? status, Color goalColor) {
     switch (status) {
       case 'completed':
-        return Colors.green;
+        return const Color(0xFF34C759);
       case 'missed':
-        return Colors.red;
+        return const Color(0xFFFF3B30);
       case 'holiday':
-        return Colors.blue;
+        return const Color(0xFF0A84FF);
       case 'sick':
-        return Colors.orange;
+        return const Color(0xFFFF9F0A);
       case 'skipped':
         return Colors.grey;
       default:
